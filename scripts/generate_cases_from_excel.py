@@ -1,5 +1,6 @@
-from __future__ import annotations
 """从结构化文本生成 pytest 用例与 AI 提示词。"""
+
+from __future__ import annotations
 
 import argparse
 import csv
@@ -41,9 +42,7 @@ def load_rows(input_path: Path) -> list[dict[str, str]]:
         try:
             from openpyxl import load_workbook
         except ImportError as exc:  # pragma: no cover - 运行环境可能未安装 openpyxl
-            raise SystemExit(
-                "读取 .xlsx 需要 openpyxl，请先安装项目依赖。"
-            ) from exc
+            raise SystemExit("读取 .xlsx 需要 openpyxl，请先安装项目依赖。") from exc
 
         workbook = load_workbook(input_path)
         sheet = workbook.active

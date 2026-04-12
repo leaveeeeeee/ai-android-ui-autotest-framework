@@ -123,7 +123,8 @@ class DeviceManager:
             or self.config.get("device.app_package", ""),
             "activity": self.config.get("device.baseline_activity")
             or self.config.get("device.app_activity", ""),
-            "url": self.config.get("device.baseline_url") or self.config.get("device.start_url", ""),
+            "url": self.config.get("device.baseline_url")
+            or self.config.get("device.start_url", ""),
             "reset_to_home_after_case": bool(
                 self.config.get("device.reset_to_home_after_case", False)
             ),

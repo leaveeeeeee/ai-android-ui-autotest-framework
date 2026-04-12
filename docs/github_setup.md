@@ -5,6 +5,7 @@
 - 代码主目录已经统一为 `framework/`
 - 运行产物已经统一为 `artifacts/reports/` 和 `artifacts/report_data/`
 - 仓库适合直接初始化为 Git 仓库
+- 已添加 `CODEOWNERS`，可配合受保护分支启用代码所有者审核
 - `.github/workflows/pr-check.yml` 会做提交与 PR 质量检查
 - `.github/workflows/docker-publish.yml` 会在主干分支发布 Docker 镜像
 
@@ -43,11 +44,18 @@ git push -u origin main
 
 ### `PR Check`
 
-- 安装项目依赖
-- 编译 `framework/`、`tests/`、`scripts/`
+- 校验 GitHub workflow 语法
+- 安装项目依赖并检查依赖冲突
+- 执行 `ruff format --check`，保证提交代码的排版统一
+- 执行 `ruff check`，限制明显的逻辑错误、导包顺序问题和高价值坏味道
+- 编译 `framework/`、`tests/`、`scripts/`、`docs/`
+- 验证文本生成用例链路是否可正常生成、编译并被 `pytest` 收集
 - 执行不依赖真机的测试：
   - `tests/test_case_generator.py`
   - `tests/test_image_engine.py`
+- 在 Python 3.9、3.11 与 3.13 上做版本兼容性验证
+- 将测试告警按失败处理，避免“能过门禁但带着明显风险”的提交进入主干
+- 执行 Docker 构建冒烟检查
 - 上传测试报告工件
 
 ### `Docker Publish`
@@ -71,11 +79,54 @@ git push -u origin main
 
 - [/.github/workflows/pr-check.yml](/Volumes/SD%20Card/从入门到%20recode/uiauto/.github/workflows/pr-check.yml)
 - [/.github/workflows/docker-publish.yml](/Volumes/SD%20Card/从入门到%20recode/uiauto/.github/workflows/docker-publish.yml)
+- [/.github/CODEOWNERS](/Volumes/SD%20Card/从入门到%20recode/uiauto/.github/CODEOWNERS)
 
 `PR Check` 除了运行检查外，还会上传一份 `ci-reports` 工件，里面包含：
 
-- `ci_pytest_report.html`
-- `ci_junit.xml`
+- `ci_pytest_report_3.9.html`
+- `ci_pytest_report_3.11.html`
+- `ci_pytest_report_3.13.html`
+- `ci_junit_3.9.xml`
+- `ci_junit_3.11.xml`
+- `ci_junit_3.13.xml`
+
+## 建议同步开启的 GitHub 仓库设置
+
+为了让门禁真正生效，建议你在 GitHub 仓库设置里把 `main` 设为受保护分支，并启用：
+
+- Require a pull request before merging
+- Require approvals
+- Require review from Code Owners
+- Require status checks to pass before merging
+
+建议勾选的检查项：
+
+- `Workflow Lint`
+- `Style And Static Check`
+- `Unit Tests (Python 3.9)`
+- `Unit Tests (Python 3.11)`
+- `Unit Tests (Python 3.13)`
+- `Docker Build Smoke`
+
+如果当前环境没有 `gh` 命令或 GitHub API 凭据，受保护分支这部分需要你在 GitHub Web 页面手动勾选。
+
+## 建议开发者本地先跑的检查
+
+为了减少反复推送再等 CI 的时间，建议在本地先执行一遍与 `PR Check` 对齐的脚本：
+
+```bash
+PYTHON_BIN="/Volumes/SD Card/从入门到 recode/解释器/bin/python" ./scripts/check_pr_gate.sh
+```
+
+脚本会依次执行：
+
+- 依赖完整性检查
+- GitHub workflow 校验
+- 代码格式检查
+- lint 规则检查
+- 编译检查
+- 文本生成用例链路验证
+- 非真机测试
 
 ## 不建议直接放到 GitHub 的内容
 

@@ -7,12 +7,30 @@ on:
       - main
   workflow_dispatch:
 
+concurrency:
+  group: pr-check-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
-  validate:
+  workflow-lint:
+    name: Workflow Lint
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate GitHub workflows
+        uses: rhysd/actionlint@v1
+
+  style-and-static-check:
+    name: Style And Static Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -22,29 +40,95 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install .
+          python -m pip install .[dev]
+
+      - name: Check dependency integrity
+        run: python -m pip check
+
+      - name: Check code format
+        run: python -m ruff format --check framework tests scripts
+
+      - name: Check lint rules
+        run: python -m ruff check framework tests scripts
 
       - name: Compile sources
-        run: python -m compileall framework tests scripts
+        run: python -m compileall framework tests scripts docs
 
-      - name: Run unit tests
+      - name: Verify generated test cases
+        run: |
+          python scripts/generate_cases_from_excel.py \
+            examples/case_inputs/test_cases_template.csv \
+            --output-dir /tmp/generated-tests \
+            --prompt-dir /tmp/generated-prompts
+          python -m compileall /tmp/generated-tests
+          python -m pytest --collect-only -q -c pytest.ini /tmp/generated-tests/test_search_via_baidu_search_chatgpt.py
+
+  unit-tests:
+    name: Unit Tests (Python ${{ matrix.python-version }})
+    needs:
+      - workflow-lint
+      - style-and-static-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version:
+          - "3.9"
+          - "3.11"
+          - "3.13"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .[dev]
+
+      - name: Run non-device tests
         run: |
           mkdir -p artifacts/reports
           python -m pytest \
-            tests/test_case_generator.py \
-            tests/test_image_engine.py \
+            tests \
+            -m "not device" \
             -q \
-            --html=artifacts/reports/ci_pytest_report.html \
+            -W error \
+            --html=artifacts/reports/ci_pytest_report_${{ matrix.python-version }}.html \
             --self-contained-html \
-            --junitxml=artifacts/reports/ci_junit.xml
+            --junitxml=artifacts/reports/ci_junit_${{ matrix.python-version }}.xml
 
-      - name: Upload CI reports
+      - name: Upload unit test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ci-reports
+          name: ci-reports-py${{ matrix.python-version }}
           path: artifacts/reports/
+
+  docker-build-smoke:
+    name: Docker Build Smoke
+    needs:
+      - workflow-lint
+      - style-and-static-check
+      - unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build -t ai-android-ui-autotest-framework:pr-check .

@@ -25,7 +25,9 @@ class TextCaseSpec:
 
     @classmethod
     def from_mapping(cls, mapping: dict[str, str]) -> "TextCaseSpec":
-        data = {str(key).strip().lower(): str(value or "").strip() for key, value in mapping.items()}
+        data = {
+            str(key).strip().lower(): str(value or "").strip() for key, value in mapping.items()
+        }
         case_id = data.get("case_id") or data.get("id") or data.get("title") or "generated_case"
         title = data.get("title") or case_id
         return cls(

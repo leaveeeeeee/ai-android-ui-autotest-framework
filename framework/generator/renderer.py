@@ -24,7 +24,7 @@ def render_test_case(spec: TextCaseSpec) -> str:
 {spec.expected or "-"}
 """''').strip()
 
-    return f'''from __future__ import annotations
+    return f"""from __future__ import annotations
 
 import pytest
 
@@ -33,7 +33,7 @@ import pytest
 def {spec.test_name}({spec.fixture}):
 {indent(docstring, "    ")}
 {indent(body, "    ")}
-'''
+"""
 
 
 def render_ai_prompt(spec: TextCaseSpec) -> str:

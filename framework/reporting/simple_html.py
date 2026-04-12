@@ -1,4 +1,3 @@
-from __future__ import annotations
 """结构化 HTML 报告生成器。
 
 这个模块负责把 pytest 执行结果整理成一套可浏览的静态报告页面：
@@ -7,6 +6,8 @@ from __future__ import annotations
 - runs 历史运行报告
 - 单用例步骤详情页
 """
+
+from __future__ import annotations
 
 import html
 import os
@@ -90,7 +91,9 @@ def add_test_row(item: pytest.Item, call: pytest.CallInfo, report: pytest.TestRe
         if len(lines) >= 2:
             xml_path = lines[1]
 
-    failure_message = (report.longreprtext or str(call.excinfo.value) if call.excinfo else "").strip()
+    failure_message = (
+        report.longreprtext or str(call.excinfo.value) if call.excinfo else ""
+    ).strip()
     detail_blocks = [failure_message] if failure_message else []
     if precheck:
         detail_blocks.append(f"[Environment Precheck]\n{precheck}")
@@ -115,7 +118,10 @@ def add_test_row(item: pytest.Item, call: pytest.CallInfo, report: pytest.TestRe
         existing["postcheck"] = postcheck or existing.get("postcheck", "")
         existing["steps"] = list(getattr(item, "_framework_steps", []))
         if postcheck:
-            message_parts = [existing.get("message", "").strip(), f"[Environment Reset]\n{postcheck}"]
+            message_parts = [
+                existing.get("message", "").strip(),
+                f"[Environment Reset]\n{postcheck}",
+            ]
             existing["message"] = "\n\n".join(part for part in message_parts if part)
         if report.failed:
             existing["outcome"] = report.outcome.upper()
@@ -193,7 +199,9 @@ def _build_case_bundle(run_root: Path, row: dict) -> dict:
         staged_steps.append(
             {
                 **step,
-                "screenshot_rel": _stage_asset(step.get("screenshot_path", ""), screenshot_dir, case_dir),
+                "screenshot_rel": _stage_asset(
+                    step.get("screenshot_path", ""), screenshot_dir, case_dir
+                ),
                 "previous_screenshot_rel": _stage_asset(
                     step.get("previous_screenshot_path", ""), screenshot_dir, case_dir
                 ),
@@ -305,6 +313,7 @@ def _render_suite_page(
     <div class="card"><div class="metric-label">总用例数</div><div class="metric-value">{total}</div></div>
     <div class="card"><div class="metric-label">通过</div><div class="metric-value">{passed}</div></div>
     <div class="card"><div class="metric-label">失败</div><div class="metric-value">{failed}</div></div>
+    <div class="card"><div class="metric-label">跳过</div><div class="metric-value">{skipped}</div></div>
     <div class="card"><div class="metric-label">成功率</div><div class="metric-value">{success_rate:.1f}%</div></div>
     <div class="card"><div class="metric-label">总耗时 / Exit</div><div class="metric-value">{duration:.2f}s / {exitstatus}</div></div>
   </div>
@@ -318,7 +327,7 @@ def _render_suite_page(
         </tr>
       </thead>
       <tbody>
-        {''.join(case_rows) or '<tr><td colspan="5">No cases recorded.</td></tr>'}
+        {"".join(case_rows) or '<tr><td colspan="5">No cases recorded.</td></tr>'}
       </tbody>
     </table>
   </div>
@@ -327,7 +336,7 @@ def _render_suite_page(
     <h2>运行历史</h2>
     <table>
       <thead><tr><th>Run ID</th><th>详情</th></tr></thead>
-      <tbody>{''.join(run_rows) or '<tr><td colspan="2">No historical runs.</td></tr>'}</tbody>
+      <tbody>{"".join(run_rows) or '<tr><td colspan="2">No historical runs.</td></tr>'}</tbody>
     </table>
   </div>
 </body>
@@ -366,7 +375,7 @@ def _render_case_page(case: dict) -> str:
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <title>{html.escape(case['nodeid'])}</title>
+  <title>{html.escape(case["nodeid"])}</title>
   <style>
     body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; color: #111827; background:#f8fafc; }}
     .topbar {{ margin-bottom:24px; }}
@@ -379,15 +388,15 @@ def _render_case_page(case: dict) -> str:
 </head>
 <body>
   <div class="topbar"><a href="../../index.html">返回套件总览</a></div>
-  <h1>{html.escape(case['nodeid'])}</h1>
+  <h1>{html.escape(case["nodeid"])}</h1>
   <div class="summary">
-    <div>结果: <span style="color:{color};font-weight:700">{html.escape(case['outcome'])} ({html.escape(case['phase'])})</span></div>
-    <div>耗时: {html.escape(case['duration'])}</div>
-    <div>步骤数: {len(case.get('steps', []))}</div>
+    <div>结果: <span style="color:{color};font-weight:700">{html.escape(case["outcome"])} ({html.escape(case["phase"])})</span></div>
+    <div>耗时: {html.escape(case["duration"])}</div>
+    <div>步骤数: {len(case.get("steps", []))}</div>
   </div>
   <div class="summary">
     <h3>失败原因 / 环境信息</h3>
-    <pre style='white-space:pre-wrap'>{html.escape(case.get('message', '')) or '-'}</pre>
+    <pre style='white-space:pre-wrap'>{html.escape(case.get("message", "")) or "-"}</pre>
   </div>
   <table>
     <thead>
@@ -396,7 +405,7 @@ def _render_case_page(case: dict) -> str:
       </tr>
     </thead>
     <tbody>
-      {''.join(step_rows) or '<tr><td colspan="13">No step rows recorded.</td></tr>'}
+      {"".join(step_rows) or '<tr><td colspan="13">No step rows recorded.</td></tr>'}
     </tbody>
   </table>
 </body>
@@ -433,9 +442,13 @@ def _recent_run_entries(reports_root: Path, current_run_id: str, relative_mode: 
         return []
 
     entries = []
-    for run_dir in sorted((path for path in runs_root.iterdir() if path.is_dir()), reverse=True)[:10]:
+    for run_dir in sorted((path for path in runs_root.iterdir() if path.is_dir()), reverse=True)[
+        :10
+    ]:
         if relative_mode == "run":
-            href = "index.html" if run_dir.name == current_run_id else f"../{run_dir.name}/index.html"
+            href = (
+                "index.html" if run_dir.name == current_run_id else f"../{run_dir.name}/index.html"
+            )
         else:
             href = f"runs/{run_dir.name}/index.html"
         entries.append(

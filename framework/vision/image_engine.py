@@ -175,10 +175,14 @@ class ImageEngine:
     def _resolve_template_path(self, image_name: str) -> Path:
         """根据模板名解析真实模板路径。"""
         candidate = Path(image_name)
-        candidates = [candidate] if candidate.suffix else [
-            candidate.with_suffix(".png"),
-            candidate.with_suffix(".jpg"),
-        ]
+        candidates = (
+            [candidate]
+            if candidate.suffix
+            else [
+                candidate.with_suffix(".png"),
+                candidate.with_suffix(".jpg"),
+            ]
+        )
 
         for template in candidates:
             full_path = template if template.is_absolute() else self.template_dir / template

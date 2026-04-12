@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable, Optional
 
-
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ARTIFACTS_DIR = PROJECT_ROOT / "artifacts"
 REPORT_DIR = ARTIFACTS_DIR / "reports"
@@ -208,7 +207,7 @@ def write_html_report(report: TestReport) -> Path:
       </tr>
     </thead>
     <tbody>
-      {''.join(step_rows)}
+      {"".join(step_rows)}
     </tbody>
   </table>
 </body>

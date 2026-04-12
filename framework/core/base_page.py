@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from framework.core.exceptions import ElementNotFoundError
 from framework.core.driver import DriverAdapter
+from framework.core.exceptions import ElementNotFoundError
 from framework.core.locator import Locator
 from framework.core.logger import setup_logger
 from framework.vision.image_engine import ImageEngine
@@ -95,14 +95,10 @@ class BasePage:
         - 页面层级 XML
         """
         screenshot_dir = Path(
-            self.driver.framework_config.get(
-                "screenshot_dir", "artifacts/report_data/screenshots"
-            )
+            self.driver.framework_config.get("screenshot_dir", "artifacts/report_data/screenshots")
         )
         source_dir = Path(
-            self.driver.framework_config.get(
-                "page_source_dir", "artifacts/report_data/page_source"
-            )
+            self.driver.framework_config.get("page_source_dir", "artifacts/report_data/page_source")
         )
         screenshot_path = screenshot_dir / f"{case_name}.png"
         source_path = source_dir / f"{case_name}.xml"

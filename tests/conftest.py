@@ -1,4 +1,3 @@
-from __future__ import annotations
 """pytest 公共入口。
 
 主要职责：
@@ -8,6 +7,8 @@ from __future__ import annotations
 - 在失败时补充截图、页面层级和报告数据
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest
@@ -16,12 +17,12 @@ from framework.core.config import ConfigManager
 from framework.device.manager import DeviceManager
 from framework.pages.demo_page import DemoPage
 from framework.pages.via_baidu_page import ViaBaiduPage
-from framework.reporting.execution_trace import ExecutionTraceRecorder
 from framework.reporting.allure_helper import attach_png as allure_attach_png
 from framework.reporting.allure_helper import attach_text as allure_attach_text
 from framework.reporting.allure_helper import attach_xml as allure_attach_xml
-from framework.reporting.simple_html import pytest_addoption as reporting_pytest_addoption
+from framework.reporting.execution_trace import ExecutionTraceRecorder
 from framework.reporting.simple_html import add_test_row as reporting_add_test_row
+from framework.reporting.simple_html import pytest_addoption as reporting_pytest_addoption
 from framework.reporting.simple_html import pytest_configure as reporting_pytest_configure
 from framework.reporting.simple_html import pytest_sessionfinish as reporting_pytest_sessionfinish
 
@@ -242,7 +243,9 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
         if page is not None:
             case_name = item.nodeid.replace("/", "_").replace("::", "_")
             screenshot_path, source_path = page.save_failure_artifacts(case_name)
-            item.add_report_section(report.when, "failure-artifacts", f"{screenshot_path}\n{source_path}")
+            item.add_report_section(
+                report.when, "failure-artifacts", f"{screenshot_path}\n{source_path}"
+            )
 
         if failure_reason:
             item.add_report_section(report.when, "failure-reason", failure_reason)

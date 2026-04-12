@@ -20,7 +20,7 @@ def test_render_test_case_with_python_calls():
     code = render_test_case(spec)
 
     assert "def test_search_via_baidu_search_chatgpt" in code
-    assert '@pytest.mark.smoke' in code
+    assert "@pytest.mark.smoke" in code
     assert 'via_baidu_page.search("chatgpt")' in code
 
 
