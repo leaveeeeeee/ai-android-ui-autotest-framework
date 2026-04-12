@@ -10,7 +10,7 @@ from framework.core.exceptions import DeviceConnectionError
 from framework.device.adb import AdbClient
 
 
-@dataclass(slots=True)
+@dataclass
 class DeviceManager:
     """统一管理设备级前后置动作。"""
 

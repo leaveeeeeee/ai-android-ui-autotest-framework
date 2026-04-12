@@ -9,7 +9,7 @@ import yaml
 from framework.core.exceptions import ConfigError
 
 
-@dataclass(slots=True)
+@dataclass
 class ConfigManager:
     """负责读取与查询 YAML 配置。"""
 

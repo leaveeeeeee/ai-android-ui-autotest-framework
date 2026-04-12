@@ -9,7 +9,7 @@ def _normalize_name(value: str, fallback: str) -> str:
     return normalized or fallback
 
 
-@dataclass(slots=True)
+@dataclass
 class TextCaseSpec:
     case_id: str
     title: str
