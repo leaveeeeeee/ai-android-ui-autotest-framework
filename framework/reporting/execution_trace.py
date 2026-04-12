@@ -10,7 +10,7 @@ def _slugify(value: str) -> str:
     return normalized or "step"
 
 
-@dataclass(slots=True)
+@dataclass
 class ExecutionStep:
     """单个执行步骤的数据结构。"""
 

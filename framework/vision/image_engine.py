@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from framework.core.driver import DriverAdapter
 
 
-@dataclass(slots=True)
+@dataclass
 class ImageMatchResult:
     """图像匹配结果。"""
 

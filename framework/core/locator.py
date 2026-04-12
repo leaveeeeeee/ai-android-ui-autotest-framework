@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 
-@dataclass(slots=True)
+@dataclass
 class Locator:
     """统一定位器模型。
 
