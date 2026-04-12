@@ -19,7 +19,7 @@ flowchart TD
     H --> I[DriverAdapter 执行点击/输入/等待]
     I --> J{普通定位是否成功}
     J -- 是 --> K[uiautomator2 与设备交互]
-    J -- 否且允许图片兜底 --> L[ImageEngine 模板匹配]
+    J -- 否且声明了图片兜底契约 --> L[ImageEngine 模板匹配]
     K --> M[record_step 记录步骤]
     L --> M
     M --> N[生成 HTML 报告和 Allure 结果]
@@ -43,13 +43,14 @@ sequenceDiagram
     S->>P: 启动 pytest
     P->>C: 加载 fixture 和 hook
     C->>D: prepare_test_environment()
-    D->>A: ADB 检查、解锁、回基线页
+    D->>A: ADB 检查、读取 focus/package/activity/输入法/屏幕状态
+    D->>A: 按状态驱动解锁、收敛临时层、回基线页
     C->>Page: 构建页面对象 fixture
     Page->>G: 调用 click/input_text/is_visible
     G->>A: 通过 uiautomator2 操作设备
     G->>R: record_step() 保存步骤信息
     P->>C: 失败时触发 makereport
-    C->>R: 追加失败原因、截图、page source
+    C->>R: 通过结构化数据写入失败原因、截图、page source、前后置信息
     P->>R: sessionfinish 生成报告入口
     R-->>U: artifacts/reports/index.html
 ```
@@ -69,6 +70,7 @@ flowchart TD
     C --> C4[allure-results Allure 原始结果]
     C --> C5[image_debug 图像匹配调试图]
     C --> C6[ai-prompts AI 提示词]
+    C --> C7[tests/generated/.manifest 生成清单]
 ```
 
 ## 推荐阅读顺序

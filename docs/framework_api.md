@@ -52,6 +52,7 @@
 - `click(locator)`: 点击元素
 - `click_point(x, y)`: 点击坐标
 - `set_text(locator, value)`: 输入文本
+- `send_keys(value, clear=False)`: 直接调用设备级输入，常用于图片兜底后的输入场景
 - `clear_text(locator)`: 清空文本
 - `exists(locator)`: 判断元素是否存在
 - `screenshot(path)`: 保存截图
@@ -59,6 +60,8 @@
 - `app_start(package, activity=None)`: 启动应用
 - `app_stop(package)`: 停止应用
 - `press(key)`: 发送按键
+- `set_runtime_context(run_id=..., case_name=...)`: 设置运行时上下文，用于生成唯一产物名
+- `build_artifact_name(base_name, category="artifact")`: 统一生成截图、XML、调试图命名
 
 ## `BasePage`
 
@@ -74,6 +77,33 @@
 - `is_visible(locator)`
 - `save_failure_artifacts(case_name)`
 
+### `Locator`
+
+文件：[framework/core/locator.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/locator.py)
+
+关键字段：
+
+- `strategy / value`: 普通定位方式
+- `fallback`: 普通定位兜底链
+- `allow_image_fallback`: 是否允许图片兜底，保留兼容旧逻辑
+- `image_template`: 显式模板名，推荐优先填写
+- `image_region`: 可选图片搜索区域
+- `image_threshold`: 可选图片匹配阈值
+
+推荐写法：
+
+```python
+Locator(
+    name="login_button",
+    strategy="resource_id",
+    value="demo:id/login",
+    allow_image_fallback=True,
+    image_template="login_button",
+    image_region=(100, 300, 900, 1200),
+    image_threshold=0.9,
+)
+```
+
 ## `DeviceManager`
 
 文件：[framework/device/manager.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/device/manager.py)
@@ -86,6 +116,11 @@
 - `reset_to_baseline()`: 用例后恢复到统一初始页面
 - `baseline_description()`: 返回当前基线页面定义
 
+当前设计重点：
+
+- 前后置基于 `focus/package/activity/输入法/屏幕状态` 判定恢复策略
+- 报告会记录恢复前后状态明细，方便排查“为什么没有回到预期基线页”
+
 ## `AdbClient`
 
 文件：[framework/device/adb.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/device/adb.py)
@@ -97,12 +132,17 @@
 - `wait_for_device()`
 - `get_state()`
 - `start_activity(package, activity, data_uri=None)`
+- `start_home()`
+- `close_system_dialogs()`
 - `force_stop(package)`
 - `press_keyevent(keycode)`
 - `go_home()`
 - `wake_up()`
 - `unlock_screen()`
 - `current_focus()`
+- `current_focus_state()`
+- `screen_is_on()`
+- `is_keyboard_visible()`
 - `is_package_installed(package)`
 
 ## 页面对象约束
@@ -132,3 +172,13 @@ driver.set_text(locator, "chatgpt")
 - `pytest.mark.device`、`pytest.mark.smoke`
 
 如果必须新增页面对象方法，应优先补到页面对象，而不是把底层 locator 直接写进测试函数。
+
+## 报告数据约束
+
+HTML 报告现在直接消费 pytest 生命周期里的结构化数据，不再从 `report.sections` 反解析文本。
+
+这意味着：
+
+- 失败原因、失败截图、页面层级、前后置明细、步骤列表都走统一数据通道
+- `simple_html`、`pytest-html`、Allure 可以共用同一份原始数据
+- 升级 pytest 或更换插件时，报告稳定性更高

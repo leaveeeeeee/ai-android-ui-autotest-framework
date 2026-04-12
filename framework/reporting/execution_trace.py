@@ -42,7 +42,8 @@ class ExecutionTraceRecorder:
     - 记录最近一张截图，便于生成前后差异图
     """
 
-    def __init__(self, case_name: str) -> None:
+    def __init__(self, case_name: str, run_id: str = "") -> None:
+        self.run_id = _slugify(run_id)
         self.case_name = _slugify(case_name)
         self.steps: list[dict[str, str | int]] = []
         self.last_screenshot_path: str = ""
@@ -50,7 +51,8 @@ class ExecutionTraceRecorder:
     def next_step_name(self, name: str) -> str:
         """生成下一步对应的文件名前缀。"""
         index = len(self.steps) + 1
-        return f"{self.case_name}_{index:02d}_{_slugify(name)}"
+        parts = [self.run_id, self.case_name, f"{index:02d}", _slugify(name)]
+        return "_".join(part for part in parts if part)
 
     def add_step(
         self,

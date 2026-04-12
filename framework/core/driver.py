@@ -11,6 +11,12 @@ from framework.core.waiter import Waiter
 from framework.reporting.image_tools import annotate_click_region, create_diff_image
 
 
+def _sanitize_artifact_name(value: str) -> str:
+    """把任意名称转换成稳定、可做文件名的片段。"""
+    normalized = re.sub(r"[^a-zA-Z0-9_]+", "_", value.strip()).strip("_").lower()
+    return normalized or "artifact"
+
+
 class DriverAdapter:
     """对 `uiautomator2` 的轻量封装。
 
@@ -34,6 +40,8 @@ class DriverAdapter:
         self.step_recorder = None
         self.step_context_provider = None
         self._device = None
+        self._runtime_context: dict[str, str] = {}
+        self._artifact_sequence = 0
 
     @property
     def device(self) -> Any:
@@ -151,6 +159,13 @@ class DriverAdapter:
         except Exception:
             return False
 
+    def send_keys(self, value: str, *, clear: bool = False) -> None:
+        """直接调用设备级输入能力。
+
+        这个方法主要用于“图片先点击，再设备级输入”的兜底场景。
+        """
+        self._send_keys(value, clear=clear)
+
     def screenshot(self, path: str | Path) -> str:
         """保存设备截图到指定路径。"""
         target = str(path)
@@ -181,6 +196,39 @@ class DriverAdapter:
         """注入步骤上下文提供器，比如当前焦点窗口。"""
         self.step_context_provider = provider
 
+    def set_runtime_context(self, **context: str) -> None:
+        """设置当前用例的运行时上下文。
+
+        运行时上下文会参与截图、页面层级、图像调试图的唯一命名。
+        """
+        self._runtime_context = {key: str(value) for key, value in context.items() if value}
+        self._artifact_sequence = 0
+
+    def clear_runtime_context(self) -> None:
+        """清空运行时上下文。"""
+        self._runtime_context = {}
+        self._artifact_sequence = 0
+
+    def build_artifact_name(self, base_name: str, *, category: str = "artifact") -> str:
+        """生成唯一产物名。
+
+        命名维度：
+        - run_id
+        - case_name
+        - category
+        - 全局序号
+        - 业务语义名
+        """
+        self._artifact_sequence += 1
+        parts = [
+            self._runtime_context.get("run_id", ""),
+            self._runtime_context.get("case_name", ""),
+            _sanitize_artifact_name(category),
+            f"{self._artifact_sequence:03d}",
+            _sanitize_artifact_name(base_name),
+        ]
+        return "_".join(part for part in parts if part)
+
     def get_bounds(self, locator: Locator) -> tuple[int, int, int, int] | None:
         """获取元素边界框，常用于高亮截图中的操作区域。"""
         element = self.find(locator)
@@ -202,7 +250,7 @@ class DriverAdapter:
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         source_dir.mkdir(parents=True, exist_ok=True)
 
-        safe_name = re.sub(r"[^a-zA-Z0-9_]+", "_", name.strip()).strip("_").lower() or "state"
+        safe_name = self.build_artifact_name(name, category="state")
         screenshot_path = screenshot_dir / f"{safe_name}.png"
         source_path = source_dir / f"{safe_name}.xml"
         self.screenshot(screenshot_path)
@@ -252,7 +300,7 @@ class DriverAdapter:
                 annotate_click_region(screenshot_path, highlight_rect)
             if previous_screenshot_path:
                 diff_path = str(
-                    Path(screenshot_path).with_name(f"{Path(step_file_name).name}_diff.png")
+                    Path(screenshot_path).with_name(f"{Path(screenshot_path).stem}_diff.png")
                 )
                 create_diff_image(previous_screenshot_path, screenshot_path, diff_path)
 

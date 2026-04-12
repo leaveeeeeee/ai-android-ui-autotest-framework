@@ -19,6 +19,7 @@ class DemoPage(BasePage):
         value="com.demo.android:id/btn_login",
         fallback=[Locator(name="login_button_text", strategy="text", value="登录")],
         allow_image_fallback=True,
+        image_template="login_button",
     )
 
     username_input = Locator(
