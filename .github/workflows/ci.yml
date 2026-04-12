@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .
+
+      - name: Compile sources
+        run: python -m compileall framework tests scripts
+
+      - name: Run unit tests
+        run: |
+          mkdir -p artifacts/reports
+          python -m pytest \
+            tests/test_case_generator.py \
+            tests/test_image_engine.py \
+            -q \
+            --html=artifacts/reports/ci_pytest_report.html \
+            --self-contained-html \
+            --junitxml=artifacts/reports/ci_junit.xml
+
+      - name: Upload CI reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-reports
+          path: artifacts/reports/

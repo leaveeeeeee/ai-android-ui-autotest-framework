@@ -1,0 +1,33 @@
+[project]
+name = "android-ui-framework"
+version = "0.1.0"
+description = "Android UI automation framework based on pytest, page objects, and uiautomator2."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "allure-pytest>=2.13.5",
+    "openpyxl>=3.1.5",
+    "opencv-python>=4.9.0.80",
+    "Pillow>=10.2.0",
+    "PyYAML>=6.0.1",
+    "pytest>=8.1.1",
+    "pytest-html>=4.1.1",
+    "uiautomator2==3.4.1",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-ra"
+markers = [
+    "smoke: smoke test cases",
+    "device: tests that require a connected Android device",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["framework*"]

@@ -1,0 +1,14 @@
+.DS_Store
+.pytest_cache/
+.venv/
+__pycache__/
+*.pyc
+
+artifacts/report_data/*
+!artifacts/report_data/.gitkeep
+
+artifacts/reports/*
+!artifacts/reports/.gitkeep
+
+tests/generated/*.py
+!tests/generated/.gitkeep

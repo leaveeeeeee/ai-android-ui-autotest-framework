@@ -1,0 +1,2 @@
+case_id,module,title,fixture,page_object,precondition,steps,expected,python_calls,markers,ai_notes
+via_baidu_search_chatgpt,search,Via 打开百度搜索 chatgpt,via_baidu_page,ViaBaiduPage,手机已连接并打开 Via 浏览器,"1. 打开百度首页 2. 在搜索框输入 chatgpt 3. 点击搜索按钮","结果页中出现 chatgpt 关键字","via_baidu_page.search(""chatgpt"")\nassert via_baidu_page.is_result_loaded(""chatgpt"")","smoke,device","百度首页搜索框 resource-id 为 index-kw，搜索按钮可能显示为 提交"
