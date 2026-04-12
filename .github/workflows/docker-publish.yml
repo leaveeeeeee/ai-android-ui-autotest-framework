@@ -74,8 +74,10 @@ jobs:
 
       - name: Write image summary
         run: |
-          echo "镜像已发布到：" >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "镜像摘要：" >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ steps.build-push.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "镜像已发布到："
+            echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
+            echo ""
+            echo "镜像摘要："
+            echo "${{ steps.build-push.outputs.digest }}"
+          } >> "$GITHUB_STEP_SUMMARY"
