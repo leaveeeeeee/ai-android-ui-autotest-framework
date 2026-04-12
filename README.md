@@ -122,6 +122,12 @@ artifacts/reports/index.html
 ./scripts/generate_allure_report.sh
 ```
 
+6. 推荐顺手安装本地 git hooks
+
+```bash
+PYTHON_BIN="/Volumes/SD Card/从入门到 recode/解释器/bin/python" ./scripts/install_git_hooks.sh
+```
+
 Allure 原始结果会固定写到：
 
 ```text

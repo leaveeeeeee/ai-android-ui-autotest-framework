@@ -45,9 +45,10 @@ git push -u origin main
 ### `PR Check`
 
 - 校验 GitHub workflow 语法
+- 校验 PR 标题或最新提交标题是否符合 Conventional Commits 规范
 - 安装项目依赖并检查依赖冲突
-- 执行 `ruff format --check`，保证提交代码的排版统一
-- 执行 `ruff check`，限制明显的逻辑错误、导包顺序问题和高价值坏味道
+- 校验 `pre-commit` 配置是否有效
+- 执行 `pre-commit run --all-files`，统一检查排版、导包顺序、YAML/TOML、私钥、超大文件等问题
 - 编译 `framework/`、`tests/`、`scripts/`、`docs/`
 - 验证文本生成用例链路是否可正常生成、编译并被 `pytest` 收集
 - 执行不依赖真机的测试：
@@ -80,6 +81,9 @@ git push -u origin main
 - [/.github/workflows/pr-check.yml](/Volumes/SD%20Card/从入门到%20recode/uiauto/.github/workflows/pr-check.yml)
 - [/.github/workflows/docker-publish.yml](/Volumes/SD%20Card/从入门到%20recode/uiauto/.github/workflows/docker-publish.yml)
 - [/.github/CODEOWNERS](/Volumes/SD%20Card/从入门到%20recode/uiauto/.github/CODEOWNERS)
+- [/.pre-commit-config.yaml](/Volumes/SD%20Card/从入门到%20recode/uiauto/.pre-commit-config.yaml)
+- [scripts/check_commit_message.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/scripts/check_commit_message.py)
+- [scripts/install_git_hooks.sh](/Volumes/SD%20Card/从入门到%20recode/uiauto/scripts/install_git_hooks.sh)
 
 `PR Check` 除了运行检查外，还会上传一份 `ci-reports` 工件，里面包含：
 
@@ -101,6 +105,7 @@ git push -u origin main
 
 建议勾选的检查项：
 
+- `Change Title Check`
 - `Workflow Lint`
 - `Style And Static Check`
 - `Unit Tests (Python 3.9)`
@@ -108,7 +113,54 @@ git push -u origin main
 - `Unit Tests (Python 3.13)`
 - `Docker Build Smoke`
 
-如果当前环境没有 `gh` 命令或 GitHub API 凭据，受保护分支这部分需要你在 GitHub Web 页面手动勾选。
+## 如果你想让我直接代配 GitHub rules，需要准备什么
+
+当前这套会话里的 GitHub 工具可以读写代码、PR、评论，但不能直接改仓库的 rulesets 或 branch protection。
+如果你希望后续由我直接代配 GitHub 规则，需要把下面任意一种能力接到这台电脑上：
+
+### 方案一：安装并登录 `gh`，这是最推荐的方式
+
+1. 安装 GitHub CLI
+
+```bash
+brew install gh
+```
+
+2. 用仓库管理员账号登录
+
+```bash
+gh auth login
+```
+
+建议选项：
+
+- GitHub.com
+- `SSH`
+- `Login with a web browser`
+
+3. 确认当前账号对仓库有管理员权限
+
+```bash
+gh auth status
+```
+
+4. 完成后告诉我，我就可以直接帮你调用 `gh api` 去配置：
+
+- 受保护分支
+- 必须通过的状态检查
+- Code Owners 审核
+- 线性历史或禁止强推等限制
+
+### 方案二：给本机提供 GitHub Token
+
+如果你不想装 `gh`，也可以在本机准备一个 Fine-grained PAT，并确保它至少具备当前仓库的这些权限：
+
+- `Administration: Read and write`
+- `Contents: Read and write`
+- `Actions: Read and write`
+- `Metadata: Read-only`
+
+然后把它配置到本机环境中。这样我后续可以通过 GitHub REST API 代你设置 rules。
 
 ## 建议开发者本地先跑的检查
 
@@ -122,11 +174,26 @@ PYTHON_BIN="/Volumes/SD Card/从入门到 recode/解释器/bin/python" ./scripts
 
 - 依赖完整性检查
 - GitHub workflow 校验
-- 代码格式检查
-- lint 规则检查
+- `pre-commit` 配置校验
+- `pre-commit` 全量检查
 - 编译检查
 - 文本生成用例链路验证
 - 非真机测试
+- 最新提交标题格式校验
+
+## 建议本地启用的 git hooks
+
+推荐在第一次拉起项目后直接安装本地 hooks，这样提交和推送前就能提前发现问题。
+
+```bash
+PYTHON_BIN="/Volumes/SD Card/从入门到 recode/解释器/bin/python" ./scripts/install_git_hooks.sh
+```
+
+安装后会启用三类 hook：
+
+- `pre-commit`：做排版、导包顺序、YAML/TOML、私钥等检查
+- `commit-msg`：校验提交标题格式
+- `pre-push`：执行完整本地 PR 门禁
 
 ## 不建议直接放到 GitHub 的内容
 

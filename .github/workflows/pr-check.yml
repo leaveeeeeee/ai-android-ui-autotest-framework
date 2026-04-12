@@ -15,6 +15,39 @@ permissions:
   contents: read
 
 jobs:
+  change-title-check:
+    name: Change Title Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .[dev]
+
+      - name: Validate PR title or latest commit title
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_TITLE: ${{ github.event.pull_request.title || '' }}
+        run: |
+          if [ "${EVENT_NAME}" = "pull_request" ]; then
+            python scripts/check_commit_message.py --message "${PR_TITLE}"
+          else
+            python scripts/check_commit_message.py --message "$(git log -1 --pretty=%s)"
+          fi
+
   workflow-lint:
     name: Workflow Lint
     runs-on: ubuntu-latest
@@ -47,14 +80,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install .[dev]
 
+      - name: Validate pre-commit config
+        run: python -m pre_commit validate-config
+
+      - name: Run pre-commit checks
+        run: python -m pre_commit run --all-files --show-diff-on-failure
+
       - name: Check dependency integrity
         run: python -m pip check
-
-      - name: Check code format
-        run: python -m ruff format --check framework tests scripts
-
-      - name: Check lint rules
-        run: python -m ruff check framework tests scripts
 
       - name: Compile sources
         run: python -m compileall framework tests scripts docs
@@ -71,6 +104,7 @@ jobs:
   unit-tests:
     name: Unit Tests (Python ${{ matrix.python-version }})
     needs:
+      - change-title-check
       - workflow-lint
       - style-and-static-check
     runs-on: ubuntu-latest
@@ -120,6 +154,7 @@ jobs:
   docker-build-smoke:
     name: Docker Build Smoke
     needs:
+      - change-title-check
       - workflow-lint
       - style-and-static-check
       - unit-tests

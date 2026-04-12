@@ -2,30 +2,47 @@
 
 set -euo pipefail
 
-PYTHON_BIN="${PYTHON_BIN:-python}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+DEFAULT_PYTHON=""
+
+if [[ -x "${PROJECT_ROOT}/.venv/bin/python" ]]; then
+  DEFAULT_PYTHON="${PROJECT_ROOT}/.venv/bin/python"
+elif [[ -x "${PROJECT_ROOT}/../解释器/bin/python" ]]; then
+  DEFAULT_PYTHON="${PROJECT_ROOT}/../解释器/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+  DEFAULT_PYTHON="$(command -v python3)"
+else
+  DEFAULT_PYTHON="python"
+fi
+
+PYTHON_BIN="${PYTHON_BIN:-${DEFAULT_PYTHON}}"
 TMP_TEST_DIR="${TMPDIR:-/tmp}/generated-tests"
 TMP_PROMPT_DIR="${TMPDIR:-/tmp}/generated-prompts"
+PRE_COMMIT_HOME="${PRE_COMMIT_HOME:-${TMPDIR:-/tmp}/pre-commit-cache}"
 
-echo "[1/7] 检查依赖完整性"
+export PRE_COMMIT_HOME
+
+echo "[1/8] 检查依赖完整性"
 "${PYTHON_BIN}" -m pip check
 
 if command -v actionlint >/dev/null 2>&1; then
-  echo "[2/7] 校验 GitHub workflow"
+  echo "[2/8] 校验 GitHub workflow"
   actionlint
 else
-  echo "[2/7] 跳过 GitHub workflow 校验：未安装 actionlint"
+  echo "[2/8] 跳过 GitHub workflow 校验：未安装 actionlint"
 fi
 
-echo "[3/7] 检查代码格式"
-"${PYTHON_BIN}" -m ruff format --check framework tests scripts
+echo "[3/8] 校验 pre-commit 配置"
+"${PYTHON_BIN}" -m pre_commit validate-config
 
-echo "[4/7] 检查 lint 规则"
-"${PYTHON_BIN}" -m ruff check framework tests scripts
+echo "[4/8] 执行 pre-commit 全量检查"
+"${PYTHON_BIN}" -m pre_commit run --all-files --show-diff-on-failure
 
-echo "[5/7] 编译核心目录"
+echo "[5/8] 编译核心目录"
 "${PYTHON_BIN}" -m compileall framework tests scripts docs
 
-echo "[6/7] 验证文本生成用例链路"
+echo "[6/8] 验证文本生成用例链路"
 rm -rf "${TMP_TEST_DIR}" "${TMP_PROMPT_DIR}"
 "${PYTHON_BIN}" scripts/generate_cases_from_excel.py \
   examples/case_inputs/test_cases_template.csv \
@@ -35,7 +52,10 @@ rm -rf "${TMP_TEST_DIR}" "${TMP_PROMPT_DIR}"
 "${PYTHON_BIN}" -m pytest --collect-only -q -c pytest.ini \
   "${TMP_TEST_DIR}/test_search_via_baidu_search_chatgpt.py"
 
-echo "[7/7] 运行非真机测试"
+echo "[7/8] 运行非真机测试"
 "${PYTHON_BIN}" -m pytest tests -m "not device" -q -W error
+
+echo "[8/8] 校验最新提交标题格式"
+"${PYTHON_BIN}" scripts/check_commit_message.py --message "$(git log -1 --pretty=%s)"
 
 echo "PR 门禁本地检查通过。"
