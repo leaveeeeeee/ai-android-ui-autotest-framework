@@ -6,11 +6,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DEFAULT_PYTHON=""
 
-if [[ -x "${PROJECT_ROOT}/.venv/bin/python" ]]; then
-  DEFAULT_PYTHON="${PROJECT_ROOT}/.venv/bin/python"
-elif [[ -x "${PROJECT_ROOT}/../解释器/bin/python" ]]; then
+has_required_modules() {
+  local candidate="$1"
+  "${candidate}" -c "import pre_commit, pytest" >/dev/null 2>&1
+}
+
+if [[ -x "${PROJECT_ROOT}/../解释器/bin/python" ]] && has_required_modules "${PROJECT_ROOT}/../解释器/bin/python"; then
   DEFAULT_PYTHON="${PROJECT_ROOT}/../解释器/bin/python"
-elif command -v python3 >/dev/null 2>&1; then
+elif [[ -x "${PROJECT_ROOT}/.venv/bin/python" ]] && has_required_modules "${PROJECT_ROOT}/.venv/bin/python"; then
+  DEFAULT_PYTHON="${PROJECT_ROOT}/.venv/bin/python"
+elif command -v python3 >/dev/null 2>&1 && has_required_modules "$(command -v python3)"; then
   DEFAULT_PYTHON="$(command -v python3)"
 else
   DEFAULT_PYTHON="python"
