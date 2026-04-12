@@ -1,5 +1,8 @@
 # Android UI 自动化框架
 
+[![PR Check](https://github.com/leaveeeeeee/ai-android-ui-autotest-framework/actions/workflows/pr-check.yml/badge.svg)](https://github.com/leaveeeeeee/ai-android-ui-autotest-framework/actions/workflows/pr-check.yml)
+[![Docker Publish](https://github.com/leaveeeeeee/ai-android-ui-autotest-framework/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/leaveeeeeee/ai-android-ui-autotest-framework/actions/workflows/docker-publish.yml)
+
 这是一套基于 `pytest + Page Object + uiautomator2 + OpenCV` 的安卓 UI 自动化框架。当前仓库已经接好真机执行、结构化 HTML 报告、Allure 结果、文本生成用例和 Docker 依赖安装。
 
 当前真机环境已验证通过的关键版本：
@@ -172,13 +175,23 @@ docker build -t android-ui-framework .
 
 容器里默认跑 pytest，并产出结构化报告和 Allure results。
 
+当前 GitHub Actions 会在 `main` 分支自动构建并发布 Docker 镜像到 GHCR：
+
+```text
+ghcr.io/leaveeeeeee/ai-android-ui-autotest-framework
+```
+
 ## GitHub
 
-本地仓库已经可以初始化为 Git 项目，并且我补了一份 GitHub CI 配置，默认只跑不依赖真机的检查：
+当前仓库已经接好两条 GitHub Actions 流程：
 
-- 语法编译检查
-- 文本生成器测试
-- 图像匹配单测
+- `PR Check`
+  - 编译检查
+  - 基础单测
+  - 上传 HTML/JUnit 工件
+- `Docker Publish`
+  - `main` 分支通过后构建镜像
+  - 发布到 GitHub Container Registry
 
 具体说明看：
 

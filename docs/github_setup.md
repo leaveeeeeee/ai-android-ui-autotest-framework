@@ -5,7 +5,8 @@
 - 代码主目录已经统一为 `framework/`
 - 运行产物已经统一为 `artifacts/reports/` 和 `artifacts/report_data/`
 - 仓库适合直接初始化为 Git 仓库
-- `.github/workflows/ci.yml` 会在 GitHub 上跑基础检查
+- `.github/workflows/pr-check.yml` 会做提交与 PR 质量检查
+- `.github/workflows/docker-publish.yml` 会在主干分支发布 Docker 镜像
 
 ## 你需要提供的信息
 
@@ -38,13 +39,23 @@ git commit -m "chore: initialize android ui automation framework"
 git push -u origin main
 ```
 
-## 当前 CI 会做什么
+## 当前 GitHub Actions 会做什么
+
+### `PR Check`
 
 - 安装项目依赖
 - 编译 `framework/`、`tests/`、`scripts/`
 - 执行不依赖真机的测试：
   - `tests/test_case_generator.py`
   - `tests/test_image_engine.py`
+- 上传测试报告工件
+
+### `Docker Publish`
+
+- 在 `main` 分支 push 后再次执行基础测试
+- 构建 Docker 镜像
+- 发布到：
+  - `ghcr.io/leaveeeeeee/ai-android-ui-autotest-framework`
 
 ## 是否需要 GitHub 流水线
 
@@ -58,9 +69,10 @@ git push -u origin main
 
 当前配置文件：
 
-- [/.github/workflows/ci.yml](/Volumes/SD%20Card/从入门到%20recode/uiauto/.github/workflows/ci.yml)
+- [/.github/workflows/pr-check.yml](/Volumes/SD%20Card/从入门到%20recode/uiauto/.github/workflows/pr-check.yml)
+- [/.github/workflows/docker-publish.yml](/Volumes/SD%20Card/从入门到%20recode/uiauto/.github/workflows/docker-publish.yml)
 
-当前流水线除了运行检查外，还会上传一份 `ci-reports` 工件，里面包含：
+`PR Check` 除了运行检查外，还会上传一份 `ci-reports` 工件，里面包含：
 
 - `ci_pytest_report.html`
 - `ci_junit.xml`

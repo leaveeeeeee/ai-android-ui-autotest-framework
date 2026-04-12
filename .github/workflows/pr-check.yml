@@ -1,11 +1,14 @@
-name: CI
+name: PR Check
 
 on:
+  pull_request:
   push:
     branches:
       - main
-  pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   validate:
