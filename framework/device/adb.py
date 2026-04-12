@@ -1,7 +1,20 @@
 from __future__ import annotations
 
+import re
 import subprocess
+from dataclasses import dataclass
 from typing import Sequence
+
+
+@dataclass
+class DeviceSnapshot:
+    """设备当前前台状态快照。"""
+
+    focus: str
+    package: str = ""
+    activity: str = ""
+    keyboard_visible: bool = False
+    screen_on: bool = True
 
 
 class AdbClient:
@@ -112,11 +125,25 @@ class AdbClient:
         self.shell("wm dismiss-keyguard")
         return "dismiss-keyguard"
 
+    def start_home(self) -> str:
+        """通过显式 HOME Intent 回到桌面。"""
+        return self.shell(
+            "am start -W -a android.intent.action.MAIN -c android.intent.category.HOME"
+        )
+
+    def close_system_dialogs(self) -> str:
+        """关闭系统级弹窗、通知栏、最近任务等临时层。"""
+        return self.shell("am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS", check=False)
+
     def current_focus(self) -> str:
         """获取当前焦点窗口信息。
 
         报告里会把这个值展示出来，便于排查步骤执行时页面是否切对了。
         """
+        return self.current_focus_state().focus
+
+    def current_focus_state(self) -> DeviceSnapshot:
+        """返回结构化前台状态。"""
         output = self.shell("dumpsys window windows", check=False)
         focus_lines = [
             line.strip()
@@ -132,7 +159,52 @@ class AdbClient:
                 )
             )
         ]
-        return " | ".join(focus_lines) if focus_lines else "unknown"
+        focus = " | ".join(focus_lines) if focus_lines else "unknown"
+        package = ""
+        activity = ""
+        match = re.search(r"([A-Za-z0-9._]+)/([A-Za-z0-9.$_/-]+)", focus)
+        if match:
+            package, activity = match.groups()
+        return DeviceSnapshot(
+            focus=focus,
+            package=package,
+            activity=activity,
+            keyboard_visible=self.is_keyboard_visible(window_output=output),
+            screen_on=self.screen_is_on(),
+        )
+
+    def screen_is_on(self) -> bool:
+        """判断屏幕是否处于点亮态。"""
+        output = self.shell("dumpsys power", check=False)
+        normalized = output.casefold()
+        if "display power: state=off" in normalized or "mwakefulness=asleep" in normalized:
+            return False
+        if "display power: state=on" in normalized or "mwakefulness=awake" in normalized:
+            return True
+        return True
+
+    def is_keyboard_visible(self, window_output: str | None = None) -> bool:
+        """判断输入法面板是否正在显示。
+
+        真机经验：
+        - `dumpsys input_method` 里的 `mIsInputViewShown=true` 在部分 MIUI 设备上会残留
+        - 真正更可靠的是看 WindowManager 中 InputMethod 窗口是否可见
+        """
+        output = window_output or self.shell("dumpsys window windows", check=False)
+        match = re.search(
+            r"Window #\d+ Window\{[^}]+ InputMethod\}:(.*?)(?:\n  Window #\d+ |\Z)",
+            output,
+            re.S,
+        )
+        if match is None:
+            return False
+
+        block = match.group(1).casefold()
+        if "isvisible=true" in block:
+            return True
+        return (
+            "mhasurface=true isreadyfordisplay()=true" in block and "mviewvisibility=0x0" in block
+        )
 
     def is_package_installed(self, package: str) -> bool:
         """判断指定应用是否已安装。"""

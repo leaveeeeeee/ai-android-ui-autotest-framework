@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -62,6 +64,70 @@ def load_rows(input_path: Path) -> list[dict[str, str]]:
     raise SystemExit("目前只支持 .xlsx 和 .csv 两种输入格式。")
 
 
+def build_manifest_path(input_path: Path, output_dir: Path) -> Path:
+    """为当前输入文件生成稳定的 manifest 路径。"""
+    output_root = output_dir.resolve()
+    source_key = hashlib.sha1(str(input_path.resolve()).encode("utf-8")).hexdigest()[:12]
+    safe_name = "".join(char if char.isalnum() else "_" for char in input_path.stem).strip("_")
+    manifest_dir = output_root / ".manifest"
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    return manifest_dir / f"{safe_name or 'generated'}_{source_key}.json"
+
+
+def load_manifest(path: Path) -> dict[str, list[str]]:
+    """读取上一次生成记录。"""
+    if not path.exists():
+        return {"generated_files": [], "prompt_files": []}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def cleanup_stale_outputs(
+    previous_manifest: dict[str, list[str]],
+    *,
+    current_generated: set[str],
+    current_prompts: set[str],
+    output_dir: Path,
+    prompt_dir: Path,
+) -> tuple[int, int]:
+    """清理当前输入源历史生成、但本次已经不存在的文件。"""
+    removed_generated = 0
+    removed_prompts = 0
+    targets = (
+        ("generated_files", current_generated, output_dir.resolve()),
+        ("prompt_files", current_prompts, prompt_dir.resolve()),
+    )
+    for key, current_paths, allowed_root in targets:
+        for previous_path in previous_manifest.get(key, []):
+            target = Path(previous_path)
+            if previous_path in current_paths or not target.exists():
+                continue
+            resolved = target.resolve()
+            if allowed_root not in (resolved, *resolved.parents):
+                continue
+            target.unlink()
+            if key == "generated_files":
+                removed_generated += 1
+            else:
+                removed_prompts += 1
+    return removed_generated, removed_prompts
+
+
+def write_manifest(
+    path: Path,
+    *,
+    input_path: Path,
+    generated_files: set[str],
+    prompt_files: set[str],
+) -> None:
+    """保存当前输入源对应的生成记录。"""
+    payload = {
+        "input_file": str(input_path.resolve()),
+        "generated_files": sorted(generated_files),
+        "prompt_files": sorted(prompt_files),
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def main() -> int:
     """执行文本转用例主流程。"""
     args = parse_args()
@@ -72,21 +138,43 @@ def main() -> int:
     prompt_dir.mkdir(parents=True, exist_ok=True)
 
     rows = load_rows(input_path)
+    manifest_path = build_manifest_path(input_path, output_dir)
+    previous_manifest = load_manifest(manifest_path)
     generated = 0
     prompts = 0
+    generated_files: set[str] = set()
+    prompt_files: set[str] = set()
     for row in rows:
         spec = TextCaseSpec.from_mapping(row)
         target_file = output_dir / spec.file_name
         target_file.write_text(render_test_case(spec), encoding="utf-8")
+        generated_files.add(str(target_file.resolve()))
         generated += 1
 
         if not spec.has_executable_calls:
             prompt_file = prompt_dir / f"{spec.case_id}.md"
             prompt_file.write_text(render_ai_prompt(spec), encoding="utf-8")
+            prompt_files.add(str(prompt_file.resolve()))
             prompts += 1
+
+    removed_generated, removed_prompts = cleanup_stale_outputs(
+        previous_manifest,
+        current_generated=generated_files,
+        current_prompts=prompt_files,
+        output_dir=output_dir,
+        prompt_dir=prompt_dir,
+    )
+    write_manifest(
+        manifest_path,
+        input_path=input_path,
+        generated_files=generated_files,
+        prompt_files=prompt_files,
+    )
 
     print(f"已生成 pytest 文件数：{generated}")
     print(f"已生成 AI 提示词数：{prompts}")
+    print(f"已清理过期 pytest 文件数：{removed_generated}")
+    print(f"已清理过期 AI 提示词数：{removed_prompts}")
     print(f"用例输出目录：{output_dir.resolve()}")
     print(f"提示词输出目录：{prompt_dir.resolve()}")
     return 0

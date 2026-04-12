@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pytest
 
+from framework.reporting.runtime_store import get_case_report_store
+
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     """注册自定义命令行参数。"""
@@ -51,6 +53,12 @@ def pytest_configure(config: pytest.Config) -> None:
     }
 
 
+def get_simple_html_run_id(config: pytest.Config) -> str:
+    """返回当前 pytest 会话的报告 run_id。"""
+    state = getattr(config, "_framework_simple_html", None) or {}
+    return str(state.get("run_id", ""))
+
+
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
     outcome = yield
@@ -68,32 +76,19 @@ def add_test_row(item: pytest.Item, call: pytest.CallInfo, report: pytest.TestRe
     if report.when not in {"setup", "call", "teardown"}:
         return
 
-    screenshot_path = ""
-    xml_path = ""
-    precheck = getattr(item, "_framework_precheck", "")
-    postcheck = getattr(item, "_framework_postcheck", "")
+    store = get_case_report_store(item)
+    failure = store.get("failure", {})
+    environment = store.get("environment", {})
+    screenshot_path = str(failure.get("screenshot", "") or "")
+    xml_path = str(failure.get("xml", "") or "")
+    precheck = str(environment.get("precheck", "") or "")
+    postcheck = str(environment.get("postcheck", "") or "")
 
-    section_contents = []
-    for section in report.sections:
-        if len(section) == 3:
-            _, _, content = section
-        elif len(section) == 2:
-            _, content = section
-        else:
-            continue
-        section_contents.append(content)
-
-    sections = [content for content in section_contents if "failure-artifacts" in content]
-    if sections:
-        lines = [line.strip() for line in sections[-1].splitlines() if line.strip()]
-        if len(lines) >= 1:
-            screenshot_path = lines[0]
-        if len(lines) >= 2:
-            xml_path = lines[1]
-
-    failure_message = (
-        report.longreprtext or str(call.excinfo.value) if call.excinfo else ""
-    ).strip()
+    failure_message = str(failure.get("reason", "") or "")
+    if report.failed and not failure_message:
+        failure_message = (
+            report.longreprtext or str(call.excinfo.value) if call.excinfo else ""
+        ).strip()
     detail_blocks = [failure_message] if failure_message else []
     if precheck:
         detail_blocks.append(f"[Environment Precheck]\n{precheck}")
@@ -110,13 +105,15 @@ def add_test_row(item: pytest.Item, call: pytest.CallInfo, report: pytest.TestRe
         "xml": xml_path,
         "precheck": precheck,
         "postcheck": postcheck,
+        "baseline": str(store.get("baseline", "") or ""),
         "phase": report.when,
-        "steps": list(getattr(item, "_framework_steps", [])),
+        "steps": list(store.get("steps", [])),
     }
 
     if report.when == "teardown" and existing is not None:
         existing["postcheck"] = postcheck or existing.get("postcheck", "")
-        existing["steps"] = list(getattr(item, "_framework_steps", []))
+        existing["steps"] = list(store.get("steps", []))
+        existing["baseline"] = str(store.get("baseline", "") or existing.get("baseline", ""))
         if postcheck:
             message_parts = [
                 existing.get("message", "").strip(),
@@ -393,6 +390,7 @@ def _render_case_page(case: dict) -> str:
     <div>结果: <span style="color:{color};font-weight:700">{html.escape(case["outcome"])} ({html.escape(case["phase"])})</span></div>
     <div>耗时: {html.escape(case["duration"])}</div>
     <div>步骤数: {len(case.get("steps", []))}</div>
+    <div>基线定义: <code>{html.escape(str(case.get("baseline", "")) or "-")}</code></div>
   </div>
   <div class="summary">
     <h3>失败原因 / 环境信息</h3>

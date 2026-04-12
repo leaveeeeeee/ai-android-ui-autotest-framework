@@ -61,9 +61,15 @@ class ImageEngine:
         image_name: str,
         threshold: float | None = None,
         region: tuple[int, int, int, int] | None = None,
+        artifact_name: str | None = None,
     ) -> ImageMatchResult:
         """匹配模板并点击匹配区域中心。"""
-        match_result = self.match(image_name=image_name, threshold=threshold, region=region)
+        match_result = self.match(
+            image_name=image_name,
+            threshold=threshold,
+            region=region,
+            artifact_name=artifact_name,
+        )
         center_x, center_y = match_result.center
         self.driver.click_point(center_x, center_y)
         self.logger.info(
@@ -80,10 +86,16 @@ class ImageEngine:
         image_name: str,
         threshold: float | None = None,
         region: tuple[int, int, int, int] | None = None,
+        artifact_name: str | None = None,
     ) -> bool:
         """判断模板是否存在于当前页面。"""
         try:
-            self.match(image_name=image_name, threshold=threshold, region=region)
+            self.match(
+                image_name=image_name,
+                threshold=threshold,
+                region=region,
+                artifact_name=artifact_name,
+            )
             return True
         except ImageMatchError:
             return False
@@ -93,11 +105,13 @@ class ImageEngine:
         image_name: str,
         threshold: float | None = None,
         region: tuple[int, int, int, int] | None = None,
+        artifact_name: str | None = None,
     ) -> ImageMatchResult:
         """执行一次模板匹配并返回详细结果。"""
         effective_threshold = self.threshold if threshold is None else threshold
         template_path = self._resolve_template_path(image_name)
-        screenshot_path = self._capture_screenshot(image_name)
+        artifact_stem = self._build_artifact_stem(image_name, artifact_name)
+        screenshot_path = self._capture_screenshot(artifact_stem)
 
         screenshot = cv2.imread(str(screenshot_path), cv2.IMREAD_COLOR)
         template = cv2.imread(str(template_path), cv2.IMREAD_COLOR)
@@ -135,7 +149,7 @@ class ImageEngine:
             top_left=top_left,
             bottom_right=bottom_right,
         )
-        self._write_debug_image(screenshot, match_result, template_path.name)
+        self._write_debug_image(screenshot, match_result, template_path.name, artifact_stem)
 
         if match_result.confidence < effective_threshold:
             raise ImageMatchError(
@@ -193,10 +207,10 @@ class ImageEngine:
             f"Image template '{image_name}' not found under {self.template_dir.resolve()}"
         )
 
-    def _capture_screenshot(self, image_name: str) -> Path:
+    def _capture_screenshot(self, artifact_stem: str) -> Path:
         """先截图，再作为图像匹配输入。"""
         self.screenshot_dir.mkdir(parents=True, exist_ok=True)
-        screenshot_path = self.screenshot_dir / f"{Path(image_name).stem}_latest.png"
+        screenshot_path = self.screenshot_dir / f"{artifact_stem}.png"
         self.driver.screenshot(screenshot_path)
         return screenshot_path
 
@@ -231,6 +245,7 @@ class ImageEngine:
         screenshot: np.ndarray,
         match_result: ImageMatchResult,
         template_name: str,
+        artifact_stem: str,
     ) -> None:
         """输出带命中框和分数标注的调试图。"""
         self.debug_dir.mkdir(parents=True, exist_ok=True)
@@ -256,5 +271,17 @@ class ImageEngine:
             2,
             cv2.LINE_AA,
         )
-        target_path = self.debug_dir / f"{Path(template_name).stem}_debug.png"
+        target_path = self.debug_dir / f"{artifact_stem}_debug.png"
         cv2.imwrite(str(target_path), debug_image)
+
+    def _build_artifact_stem(self, image_name: str, artifact_name: str | None) -> str:
+        """生成图像匹配产物名。
+
+        如果 driver 提供了统一命名器，则使用运行时上下文拼出唯一文件名；
+        否则回退为原始模板名，方便单元测试中的轻量假驱动继续工作。
+        """
+        base_name = artifact_name or Path(image_name).stem
+        builder = getattr(self.driver, "build_artifact_name", None)
+        if callable(builder):
+            return str(builder(base_name, category="image_match"))
+        return Path(base_name).stem

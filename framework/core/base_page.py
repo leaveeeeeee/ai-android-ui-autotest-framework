@@ -43,15 +43,26 @@ class BasePage:
         try:
             self.driver.click(locator)
         except ElementNotFoundError:
-            if locator.allow_image_fallback:
-                self.logger.warning("Falling back to image click for '%s'", locator.name)
-                self.image_engine.click(locator.name)
+            if self._click_with_image_fallback(locator):
                 return
             raise
 
     def input_text(self, locator: Locator, value: str) -> None:
         """向输入框写入文本。"""
-        self.driver.set_text(locator, value)
+        try:
+            self.driver.set_text(locator, value)
+        except ElementNotFoundError:
+            fallback = locator.image_fallback_config()
+            if fallback is None:
+                raise
+            self.logger.warning("使用图片兜底聚焦输入框：%s", locator.name)
+            self.image_engine.click(
+                fallback["template"],
+                threshold=fallback["threshold"],
+                region=fallback["region"],
+                artifact_name=f"{locator.name}_input",
+            )
+            self.driver.send_keys(value, clear=True)
 
     def clear_text(self, locator: Locator) -> None:
         """清空输入框内容。"""
@@ -59,7 +70,19 @@ class BasePage:
 
     def is_visible(self, locator: Locator) -> bool:
         """判断元素当前是否可见。"""
-        return self.driver.exists(locator)
+        if self.driver.exists(locator):
+            return True
+
+        fallback = locator.image_fallback_config()
+        if fallback is None:
+            return False
+        self.logger.info("普通定位未命中，使用图片兜底检查可见性：%s", locator.name)
+        return self.image_engine.exists(
+            fallback["template"],
+            threshold=fallback["threshold"],
+            region=fallback["region"],
+            artifact_name=f"{locator.name}_visible",
+        )
 
     def record_step(
         self,
@@ -100,11 +123,26 @@ class BasePage:
         source_dir = Path(
             self.driver.framework_config.get("page_source_dir", "artifacts/report_data/page_source")
         )
-        screenshot_path = screenshot_dir / f"{case_name}.png"
-        source_path = source_dir / f"{case_name}.xml"
+        artifact_name = self.driver.build_artifact_name(case_name, category="failure")
+        screenshot_path = screenshot_dir / f"{artifact_name}.png"
+        source_path = source_dir / f"{artifact_name}.xml"
         screenshot_path.parent.mkdir(parents=True, exist_ok=True)
         source_path.parent.mkdir(parents=True, exist_ok=True)
 
         self.driver.screenshot(screenshot_path)
         source_path.write_text(self.driver.page_source(), encoding="utf-8")
         return str(screenshot_path), str(source_path)
+
+    def _click_with_image_fallback(self, locator: Locator) -> bool:
+        """按显式图片兜底契约执行点击。"""
+        fallback = locator.image_fallback_config()
+        if fallback is None:
+            return False
+        self.logger.warning("普通定位失败，改用图片兜底点击：%s", locator.name)
+        self.image_engine.click(
+            fallback["template"],
+            threshold=fallback["threshold"],
+            region=fallback["region"],
+            artifact_name=f"{locator.name}_click",
+        )
+        return True

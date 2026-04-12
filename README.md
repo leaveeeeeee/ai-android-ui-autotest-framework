@@ -76,17 +76,18 @@ flowchart TD
 - 每一步的截图、点击区域红框、前后截图对比图、差异图
 - 每一步的日志、预期、实际、对比结果、当前焦点窗口
 - 失败原因、失败截图、page source
+- 所有截图、调试图、差异图都带 `run_id + case_name + step/index` 唯一命名，不会互相覆盖
 
 `artifacts/report_data/` 里是原始生成数据，通常只在排障或二次分析时看。
 
 ## 当前框架能力
 
-- 公共前置：执行前检查 ADB、设备状态、解锁、应用安装、恢复基线页
-- 公共后置：执行后强停应用并回到统一初始状态
+- 公共前置：执行前检查 ADB、设备状态、焦点窗口、输入法、屏幕状态，并按状态驱动恢复基线页
+- 公共后置：执行后按状态收敛到统一初始状态，不再依赖固定 `sleep + back/home/back`
 - 页面对象：业务语义方法集中在 `framework/pages/`
-- 图像兜底：`framework/vision/image_engine.py`
-- 文本生成用例：支持 `csv/xlsx` 转 pytest；信息不完整时可同时产出 AI prompt
-- 报告链路：结构化 HTML + `pytest-html` + Allure results
+- 图像兜底：`Locator` 支持显式声明 `image_template / image_region / image_threshold`
+- 文本生成用例：支持 `csv/xlsx` 转 pytest；信息不完整时可同时产出 AI prompt，并自动清理当前输入源的过期生成文件
+- 报告链路：结构化 HTML + `pytest-html` + Allure results，HTML 报告已改为结构化数据驱动
 
 ## 快速开始
 
@@ -161,6 +162,9 @@ python scripts/generate_cases_from_excel.py examples/case_inputs/test_cases_temp
 ```text
 artifacts/report_data/ai-prompts/
 ```
+
+生成脚本会在 `tests/generated/.manifest/` 下维护当前输入源的 manifest，
+下次再次生成时会自动清理这个输入源之前生成、但本次已经删除的旧 pytest 文件和 AI prompt。
 
 相关文档：
 
