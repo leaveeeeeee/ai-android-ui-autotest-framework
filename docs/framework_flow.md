@@ -15,16 +15,17 @@ flowchart TD
     D --> E[framework.pytest_plugin 注册 fixtures 和 hooks]
     E --> F[创建 config / device_manager / driver fixture]
     F --> G[真机前置检查]
-    G --> H[启动页面对象 fixture 并登记到 stash]
+    G --> H[fixture 装配 ImageEngine 并登记页面对象到 stash]
     H --> I[用例调用页面对象业务方法]
     I --> J[DriverAdapter 统一等待/点击重试]
     J --> K{普通定位是否成功}
     K -- 是 --> L[uiautomator2 与设备交互]
     K -- 否且声明了图片兜底契约 --> M[ImageEngine 多尺度模板匹配]
-    L --> N[record_step 记录步骤与 duration_ms]
+    L --> N[ArtifactManager + StepCaptureService 采集状态]
     M --> N
-    N --> O[hook 挂附件 + runtime_store 聚合]
-    O --> P[生成 HTML 报告和 Allure 结果]
+    N --> O[record_step 写入步骤与 duration_ms]
+    O --> P[hook 挂附件 + runtime_store 聚合]
+    P --> Q[生成 HTML 报告和 Allure 结果]
 ```
 
 ## 真机用例执行链路
@@ -49,9 +50,11 @@ sequenceDiagram
     Hooks->>D: prepare_test_environment()
     D->>A: ADB 检查、读取 focus/package/activity/输入法/屏幕状态
     D->>A: 按状态驱动解锁、收敛临时层、回基线页
-    Plugin->>Page: 构建页面对象 fixture 并登记 stash
+    Plugin->>Page: 构建 ImageEngine 并注入页面对象 fixture
+    Plugin->>Page: 登记页面对象到 stash
     Page->>G: 调用 click/input_text/is_visible
     G->>A: 通过 uiautomator2 或图像兜底操作设备
+    G->>R: ArtifactManager / StepCaptureService 采集截图、XML、diff
     G->>R: record_step() 保存步骤信息和耗时
     P->>Hooks: 失败时触发 makereport
     Hooks->>R: 结构化数据写入失败原因、截图、page source、前后置信息
@@ -87,5 +90,6 @@ flowchart TD
 
 1. 先看 [README.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/README.md)
 2. 再看 [docs/framework_api.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/framework_api.md)
-3. 然后看 [framework/pytest_plugin.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_plugin.py) 和 [framework/reporting/hooks.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/reporting/hooks.py)
-4. 最后结合实际页面对象查看 [framework/pages/via_baidu_page.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pages/via_baidu_page.py)
+3. 然后看 [docs/adr/0001-driver-facade-and-step-capture.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/adr/0001-driver-facade-and-step-capture.md)
+4. 再看 [framework/pytest_plugin.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_plugin.py) 和 [framework/reporting/hooks.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/reporting/hooks.py)
+5. 最后结合实际页面对象查看 [framework/pages/via_baidu_page.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pages/via_baidu_page.py)

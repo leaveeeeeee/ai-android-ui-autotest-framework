@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from framework.core.base_page import BasePage
 from framework.core.locator import Locator
 from tests.fakes import FakeImageEngine, FakePageDriver, not_found
@@ -62,3 +64,14 @@ def test_base_page_uses_explicit_image_template_for_fallbacks() -> None:
             },
         ),
     ]
+
+
+def test_base_page_builds_image_engine_via_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+    built_engine = FakeImageEngine()
+    driver = FakePageDriver(framework_config={"image_template_dir": "artifacts/templates"})
+
+    monkeypatch.setattr("framework.core.base_page.build_image_engine", lambda current: built_engine)
+
+    page = BasePage(driver=driver)
+
+    assert page.image_engine is built_engine

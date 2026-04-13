@@ -7,6 +7,7 @@ from framework.core.driver import DriverAdapter
 from framework.core.exceptions import ElementNotFoundError
 from framework.core.locator import Locator
 from framework.core.logger import setup_logger
+from framework.vision.factory import build_image_engine
 from framework.vision.image_engine import ImageEngine
 
 
@@ -23,14 +24,7 @@ class BasePage:
 
     def __init__(self, driver: DriverAdapter, image_engine: ImageEngine | None = None) -> None:
         self.driver = driver
-        self.image_engine = image_engine or ImageEngine(
-            driver=driver,
-            template_dir=setting_from_mapping(driver.framework_config, "image_template_dir"),
-            screenshot_dir=setting_from_mapping(driver.framework_config, "screenshot_dir"),
-            debug_dir=setting_from_mapping(driver.framework_config, "image_debug_dir"),
-            threshold=float(setting_from_mapping(driver.framework_config, "image_match_threshold")),
-            scales=setting_from_mapping(driver.framework_config, "image_match_scales"),
-        )
+        self.image_engine = image_engine or build_image_engine(driver)
         self.logger = setup_logger(self.__class__.__name__)
 
     def click(self, locator: Locator) -> None:

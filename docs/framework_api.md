@@ -18,6 +18,12 @@
 
 - `uiautomator2==3.4.1`
 
+补充阅读：
+
+- 设计决策记录：[docs/adr/0001-driver-facade-and-step-capture.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/adr/0001-driver-facade-and-step-capture.md)
+- 升级指南：[docs/upgrade_guide.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/upgrade_guide.md)
+- 性能基线：[docs/performance_baseline.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/performance_baseline.md)
+
 ## Fixture
 
 pytest 的注册入口仍然是 [tests/conftest.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/tests/conftest.py)，
@@ -86,6 +92,12 @@ pytest 的注册入口仍然是 [tests/conftest.py](/Volumes/SD%20Card/从入门
 - 元素等待统一走 `Waiter`，与 `DeviceManager` 使用相同的超时/轮询语义
 - `click()` 支持 `framework.click_retry_count` 和 `framework.click_retry_interval`
 - 查找、点击、输入失败时会附带 `locator.describe()`、有效超时、重试次数等上下文
+- `DriverAdapter` 仍作为稳定 facade，对外不要求理解内部采集组件
+
+当前内部协作组件：
+
+- [framework/core/artifact_manager.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/artifact_manager.py)：负责运行时命名和状态采集
+- [framework/core/step_capture.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/step_capture.py)：负责焦点上下文、截图高亮、diff 图和页面层级采集
 
 ## `BasePage`
 
@@ -105,6 +117,8 @@ pytest 的注册入口仍然是 [tests/conftest.py](/Volumes/SD%20Card/从入门
 
 - 默认路径、图片阈值、图像缩放列表都从统一默认值模块回退
 - 页面对象里的图片兜底走 `ImageEngine` 多尺度模板匹配
+- 推荐在 fixture 或 page factory 中显式注入 `ImageEngine`
+- `BasePage(driver)` 仍保留默认构造能力，仅作为兼容性回退
 
 ### `Locator`
 
