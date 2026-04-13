@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import subprocess
 
-from framework.device.adb import AdbClient, parse_focus_state
+from framework.device.adb import AdbClient, parse_focus_state, parse_keyboard_visible
 
 
 def test_adb_client_parses_focus_state_and_keyboard(monkeypatch):
@@ -75,3 +75,17 @@ def test_parse_focus_state_is_pure_and_reusable() -> None:
     assert snapshot.activity == ".Shell"
     assert snapshot.keyboard_visible is True
     assert snapshot.screen_on is False
+
+
+def test_parse_keyboard_visible_ignores_hidden_ime_with_stale_visible_flag() -> None:
+    assert (
+        parse_keyboard_visible(
+            (
+                "Window #16 Window{9846559 u0 InputMethod}:\n"
+                "  mViewVisibility=0x8\n"
+                "  mHasSurface=false isReadyForDisplay()=false\n"
+                "  isVisible=true\n"
+            )
+        )
+        is False
+    )

@@ -47,9 +47,9 @@ def parse_keyboard_visible(window_output: str) -> bool:
         return False
 
     block = match.group(1).casefold()
-    if "isvisible=true" in block:
-        return True
-    return "mhasurface=true isreadyfordisplay()=true" in block and "mviewvisibility=0x0" in block
+    # MIUI 机型上偶尔会残留 `isVisible=true`，但输入法窗口已经 `mHasSurface=false`
+    # 或 `mViewVisibility=0x8`。只有窗口真正具备 surface 且可见时，才认为键盘展开。
+    return "mhassurface=true isreadyfordisplay()=true" in block and "mviewvisibility=0x0" in block
 
 
 def parse_focus_state(window_output: str, power_output: str) -> "DeviceSnapshot":
