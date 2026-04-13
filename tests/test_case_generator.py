@@ -27,6 +27,24 @@ def test_render_test_case_with_python_calls():
     assert 'via_baidu_page.search("chatgpt")' in code
 
 
+def test_render_test_case_supports_feature_marker():
+    spec = TextCaseSpec.from_mapping(
+        {
+            "case_id": "via_baidu_feature_search",
+            "module": "search",
+            "title": "Via 搜索 feature marker",
+            "fixture": "via_baidu_page",
+            "page_object": "ViaBaiduPage",
+            "python_calls": 'assert via_baidu_page.is_result_loaded("chatgpt")',
+            "markers": 'smoke,feature("search")',
+        }
+    )
+
+    code = render_test_case(spec)
+
+    assert '@pytest.mark.feature("search")' in code
+
+
 def test_render_ai_prompt_for_incomplete_case():
     spec = TextCaseSpec.from_mapping(
         {

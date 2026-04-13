@@ -5,6 +5,71 @@ import subprocess
 from dataclasses import dataclass
 from typing import Sequence
 
+WINDOW_FOCUS_KEYWORDS = (
+    "mCurrentFocus",
+    "mFocusedApp",
+    "mResumeActivity",
+    "imeInputTarget",
+    "imeLayeringTarget",
+)
+
+
+def extract_focus_lines(window_output: str) -> list[str]:
+    """从 `dumpsys window windows` 中提取焦点相关行。"""
+
+    return [
+        line.strip()
+        for line in window_output.splitlines()
+        if any(keyword in line for keyword in WINDOW_FOCUS_KEYWORDS)
+    ]
+
+
+def parse_screen_is_on(power_output: str) -> bool:
+    """从 `dumpsys power` 输出中判断屏幕是否点亮。"""
+
+    normalized = power_output.casefold()
+    if "display power: state=off" in normalized or "mwakefulness=asleep" in normalized:
+        return False
+    if "display power: state=on" in normalized or "mwakefulness=awake" in normalized:
+        return True
+    return True
+
+
+def parse_keyboard_visible(window_output: str) -> bool:
+    """从 WindowManager 输出中判断输入法面板是否显示。"""
+
+    match = re.search(
+        r"Window #\d+ Window\{[^}]+ InputMethod\}:(.*?)(?:\n  Window #\d+ |\Z)",
+        window_output,
+        re.S,
+    )
+    if match is None:
+        return False
+
+    block = match.group(1).casefold()
+    if "isvisible=true" in block:
+        return True
+    return "mhasurface=true isreadyfordisplay()=true" in block and "mviewvisibility=0x0" in block
+
+
+def parse_focus_state(window_output: str, power_output: str) -> "DeviceSnapshot":
+    """把 dumpsys 原始输出解析为结构化设备快照。"""
+
+    focus_lines = extract_focus_lines(window_output)
+    focus = " | ".join(focus_lines) if focus_lines else "unknown"
+    package = ""
+    activity = ""
+    match = re.search(r"([A-Za-z0-9._]+)/([A-Za-z0-9.$_/-]+)", focus)
+    if match:
+        package, activity = match.groups()
+    return DeviceSnapshot(
+        focus=focus,
+        package=package,
+        activity=activity,
+        keyboard_visible=parse_keyboard_visible(window_output),
+        screen_on=parse_screen_is_on(power_output),
+    )
+
 
 @dataclass
 class DeviceSnapshot:
@@ -144,44 +209,13 @@ class AdbClient:
 
     def current_focus_state(self) -> DeviceSnapshot:
         """返回结构化前台状态。"""
-        output = self.shell("dumpsys window windows", check=False)
-        focus_lines = [
-            line.strip()
-            for line in output.splitlines()
-            if any(
-                keyword in line
-                for keyword in (
-                    "mCurrentFocus",
-                    "mFocusedApp",
-                    "mResumeActivity",
-                    "imeInputTarget",
-                    "imeLayeringTarget",
-                )
-            )
-        ]
-        focus = " | ".join(focus_lines) if focus_lines else "unknown"
-        package = ""
-        activity = ""
-        match = re.search(r"([A-Za-z0-9._]+)/([A-Za-z0-9.$_/-]+)", focus)
-        if match:
-            package, activity = match.groups()
-        return DeviceSnapshot(
-            focus=focus,
-            package=package,
-            activity=activity,
-            keyboard_visible=self.is_keyboard_visible(window_output=output),
-            screen_on=self.screen_is_on(),
-        )
+        window_output = self.shell("dumpsys window windows", check=False)
+        power_output = self.shell("dumpsys power", check=False)
+        return parse_focus_state(window_output=window_output, power_output=power_output)
 
     def screen_is_on(self) -> bool:
         """判断屏幕是否处于点亮态。"""
-        output = self.shell("dumpsys power", check=False)
-        normalized = output.casefold()
-        if "display power: state=off" in normalized or "mwakefulness=asleep" in normalized:
-            return False
-        if "display power: state=on" in normalized or "mwakefulness=awake" in normalized:
-            return True
-        return True
+        return parse_screen_is_on(self.shell("dumpsys power", check=False))
 
     def is_keyboard_visible(self, window_output: str | None = None) -> bool:
         """判断输入法面板是否正在显示。
@@ -191,20 +225,7 @@ class AdbClient:
         - 真正更可靠的是看 WindowManager 中 InputMethod 窗口是否可见
         """
         output = window_output or self.shell("dumpsys window windows", check=False)
-        match = re.search(
-            r"Window #\d+ Window\{[^}]+ InputMethod\}:(.*?)(?:\n  Window #\d+ |\Z)",
-            output,
-            re.S,
-        )
-        if match is None:
-            return False
-
-        block = match.group(1).casefold()
-        if "isvisible=true" in block:
-            return True
-        return (
-            "mhasurface=true isreadyfordisplay()=true" in block and "mviewvisibility=0x0" in block
-        )
+        return parse_keyboard_visible(output)
 
     def is_package_installed(self, package: str) -> bool:
         """判断指定应用是否已安装。"""

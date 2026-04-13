@@ -3,7 +3,7 @@ from __future__ import annotations
 from _pytest.stash import Stash
 
 from framework.reporting.runtime_store import get_case_report_store
-from framework.reporting.simple_html import add_test_row
+from framework.reporting.simple_html import _render_case_page, add_test_row
 
 
 class DummyConfig:
@@ -55,3 +55,39 @@ def test_simple_html_prefers_structured_runtime_store_over_sections() -> None:
     assert "搜索按钮未出现" in row["message"]
     assert "[Environment Precheck]" in row["message"]
     assert "[Environment Reset]" in row["message"]
+
+
+def test_simple_html_case_template_renders_duration_and_stylesheet() -> None:
+    html = _render_case_page(
+        {
+            "nodeid": "tests/test_demo.py::test_case",
+            "outcome": "PASSED",
+            "phase": "call",
+            "duration": "1.23s",
+            "step_duration_label": "125ms",
+            "baseline": "{'package': 'mark.via'}",
+            "message": "ok",
+            "steps": [
+                {
+                    "index": 1,
+                    "name": "点击搜索",
+                    "status": "PASSED",
+                    "duration_label": "125ms",
+                    "expected": "ok",
+                    "actual": "ok",
+                    "comparison": "PASS",
+                    "logs": "",
+                    "focus_window": "",
+                    "previous_screenshot_rel": "",
+                    "screenshot_rel": "",
+                    "diff_rel": "",
+                    "source_rel": "",
+                    "detail": "",
+                }
+            ],
+        },
+        stylesheet_href="../../report.css",
+    )
+
+    assert "../../report.css" in html
+    assert "125ms" in html

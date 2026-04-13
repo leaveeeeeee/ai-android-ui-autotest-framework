@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 from typing import Any
 
+from framework.core.defaults import setting_from_mapping
 from framework.core.exceptions import DeviceConnectionError, ElementNotFoundError
 from framework.core.locator import Locator
-from framework.core.logger import setup_logger
+from framework.core.logger import init_logging, setup_logger
+from framework.core.protocols import StepContextProvider, StepRecorder
 from framework.core.waiter import Waiter
 from framework.reporting.image_tools import annotate_click_region, create_diff_image
 
@@ -34,19 +37,31 @@ class DriverAdapter:
         framework_config: dict[str, Any] | None = None,
     ) -> None:
         self.serial = serial
+        init_logging(framework_config)
         self.logger = setup_logger()
         self.waiter = Waiter(timeout=default_timeout, interval=retry_interval)
         self.framework_config = framework_config or {}
-        self.step_recorder = None
-        self.step_context_provider = None
+        self.step_recorder: StepRecorder | None = None
+        self.step_context_provider: StepContextProvider | None = None
         self._device = None
         self._runtime_context: dict[str, str] = {}
         self._artifact_sequence = 0
+        self.click_retry_count = int(
+            setting_from_mapping(self.framework_config, "click_retry_count")
+        )
+        self.click_retry_interval = float(
+            self.framework_config.get(
+                "click_retry_interval",
+                setting_from_mapping(self.framework_config, "default_retry_interval"),
+            )
+        )
 
     @property
     def device(self) -> Any:
         if self._device is None:
-            raise DeviceConnectionError("Device is not connected.")
+            raise DeviceConnectionError(
+                f"Device is not connected for serial {self.serial or 'default'}."
+            )
         return self._device
 
     def connect(self) -> "DriverAdapter":
@@ -58,7 +73,9 @@ class DriverAdapter:
             self.logger.info("Connected to device: %s", self.serial or "default")
             return self
         except Exception as exc:
-            raise DeviceConnectionError(f"Failed to connect to device: {exc}") from exc
+            raise DeviceConnectionError(
+                f"Failed to connect to device for serial {self.serial or 'default'}: {exc}"
+            ) from exc
 
     def find(self, locator: Locator) -> Any:
         """查找元素。
@@ -82,20 +99,38 @@ class DriverAdapter:
                 )
                 return element
 
-        raise ElementNotFoundError(f"Unable to locate element: {locator.name}")
+        attempted = [locator.describe(), *(fallback.describe() for fallback in locator.fallback)]
+        raise ElementNotFoundError(
+            "Unable to locate element. Attempted locators: " + " | ".join(attempted)
+        )
 
     def click(self, locator: Locator) -> None:
         """点击元素。
 
         对 XPath/WebView 场景优先使用元素中心点点击，减少 `.click()` 在真机上的不稳定问题。
         """
-        element = self.find(locator)
-        if locator.strategy == "xpath":
-            bounds = self._extract_bounds(element)
-            if bounds is not None:
-                self._click_bounds_center(bounds)
+        last_error: Exception | None = None
+        attempts = max(1, self.click_retry_count)
+        for attempt in range(1, attempts + 1):
+            try:
+                element = self.find(locator)
+                if locator.strategy == "xpath":
+                    bounds = self._extract_bounds(element)
+                    if bounds is not None:
+                        self._click_bounds_center(bounds)
+                        return
+                element.click()
                 return
-        element.click()
+            except Exception as exc:
+                last_error = exc
+                if attempt == attempts:
+                    break
+                time.sleep(self.click_retry_interval)
+        raise ElementNotFoundError(
+            "Failed to click element after retries: "
+            f"{locator.describe()}, retries={attempts}, interval={self.click_retry_interval}. "
+            f"Last error: {last_error}"
+        )
 
     def click_point(self, x: int, y: int) -> None:
         """按坐标点击屏幕。"""
@@ -134,7 +169,10 @@ class DriverAdapter:
                 if not value or self._page_contains_text(value):
                     return
 
-            message = f"Failed to set text for {locator.name}: value '{value}' was not observed."
+            message = (
+                "Failed to set text: "
+                f"{locator.describe()}, value={value!r} was not observed in page source."
+            )
             if last_error is not None:
                 message = f"{message} Last error: {last_error}"
             raise ElementNotFoundError(message)
@@ -150,7 +188,7 @@ class DriverAdapter:
         if hasattr(element, "set_text"):
             element.set_text("")
             return
-        raise ElementNotFoundError(f"Element does not support clear_text: {locator.name}")
+        raise ElementNotFoundError(f"Element does not support clear_text: {locator.describe()}")
 
     def exists(self, locator: Locator) -> bool:
         """判断元素是否存在。"""
@@ -188,11 +226,11 @@ class DriverAdapter:
         """发送按键。"""
         self.device.press(key)
 
-    def set_step_recorder(self, recorder) -> None:
+    def set_step_recorder(self, recorder: StepRecorder | None) -> None:
         """注入步骤记录器。通常在 pytest 生命周期中设置。"""
         self.step_recorder = recorder
 
-    def set_step_context_provider(self, provider) -> None:
+    def set_step_context_provider(self, provider: StepContextProvider | None) -> None:
         """注入步骤上下文提供器，比如当前焦点窗口。"""
         self.step_context_provider = provider
 
@@ -241,12 +279,8 @@ class DriverAdapter:
         - 截图路径
         - 页面层级 XML 路径
         """
-        screenshot_dir = Path(
-            self.framework_config.get("screenshot_dir", "artifacts/report_data/screenshots")
-        )
-        source_dir = Path(
-            self.framework_config.get("page_source_dir", "artifacts/report_data/page_source")
-        )
+        screenshot_dir = Path(setting_from_mapping(self.framework_config, "screenshot_dir"))
+        source_dir = Path(setting_from_mapping(self.framework_config, "page_source_dir"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
         source_dir.mkdir(parents=True, exist_ok=True)
 
@@ -282,6 +316,7 @@ class DriverAdapter:
         if self.step_recorder is None:
             return
 
+        started_at = time.perf_counter()
         screenshot_path = ""
         previous_screenshot_path = self.step_recorder.last_screenshot_path
         diff_path = ""
@@ -317,6 +352,7 @@ class DriverAdapter:
             previous_screenshot_path=previous_screenshot_path,
             diff_path=diff_path,
             source_path=source_path,
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
         )
 
     def _find_once(self, locator: Locator) -> Any | None:
@@ -325,22 +361,42 @@ class DriverAdapter:
             return None
         if locator.strategy == "xpath":
             xpath_obj = self.device.xpath(locator.value)
-            matched = xpath_obj.wait(timeout=locator.timeout or self.waiter.timeout)
-            if matched:
-                return xpath_obj
-            return None
+            return self._wait_for_element(xpath_obj, locator)
 
         kwargs = locator.as_kwargs()
         if not kwargs:
-            raise ElementNotFoundError(
-                f"Unsupported locator strategy '{locator.strategy}' for {locator.name}"
-            )
+            raise ElementNotFoundError(f"Unsupported locator strategy for {locator.describe()}")
 
         obj = self.device(**kwargs)
+        return self._wait_for_element(obj, locator)
+
+    def _wait_for_element(self, candidate: Any, locator: Locator) -> Any | None:
+        """统一通过 `Waiter` 等待元素出现。"""
+
         timeout = locator.timeout or self.waiter.timeout
-        if obj.wait(timeout=timeout):
-            return obj
-        return None
+        try:
+            return self.waiter.until(
+                lambda: candidate if self._element_exists(candidate) else None,
+                message=f"Locator timed out: {locator.describe()}, timeout={timeout}",
+                timeout=timeout,
+                interval=self.waiter.interval,
+            )
+        except TimeoutError:
+            return None
+
+    def _element_exists(self, candidate: Any) -> bool:
+        """兼容不同底层对象的存在性判断。"""
+
+        exists_attr = getattr(candidate, "exists", None)
+        if callable(exists_attr):
+            return bool(exists_attr())
+        if exists_attr is not None:
+            return bool(exists_attr)
+
+        wait_method = getattr(candidate, "wait", None)
+        if callable(wait_method):
+            return bool(wait_method(timeout=0))
+        return False
 
     def _extract_bounds(self, element: Any) -> tuple[int, int, int, int] | None:
         """尽量从不同元素对象结构中解析边界框。"""

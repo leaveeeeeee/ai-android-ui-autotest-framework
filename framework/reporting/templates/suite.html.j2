@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="{{ stylesheet_href }}">
+</head>
+<body>
+  <h1>{{ title }}</h1>
+  <div class="subtitle">{{ subtitle }}</div>
+
+  <div class="metrics">
+    <div class="card"><div class="metric-label">总用例数</div><div class="metric-value">{{ metrics.total }}</div></div>
+    <div class="card"><div class="metric-label">通过</div><div class="metric-value">{{ metrics.passed }}</div></div>
+    <div class="card"><div class="metric-label">失败</div><div class="metric-value">{{ metrics.failed }}</div></div>
+    <div class="card"><div class="metric-label">跳过</div><div class="metric-value">{{ metrics.skipped }}</div></div>
+    <div class="card"><div class="metric-label">成功率</div><div class="metric-value">{{ metrics.success_rate }}</div></div>
+    <div class="card"><div class="metric-label">总耗时 / Exit</div><div class="metric-value">{{ duration }} / {{ exitstatus }}</div></div>
+  </div>
+
+  <div class="section">
+    <h2>用例总览</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>用例</th>
+          <th>结果</th>
+          <th>耗时</th>
+          <th>步骤数</th>
+          <th>步骤耗时</th>
+          <th>失败摘要 / 环境信息</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% if cases %}
+          {% for case in cases %}
+          <tr>
+            <td><a href="{{ case.get('case_link') or ('cases/' ~ case.case_slug ~ '/index.html') }}">{{ case.nodeid }}</a></td>
+            <td class="status {{ case.outcome|lower }}">{{ case.outcome }} ({{ case.phase }})</td>
+            <td>{{ case.duration }}</td>
+            <td>{{ case.steps|length }}</td>
+            <td>{{ case.step_duration_label }}</td>
+            <td><pre class="wrapped">{{ case.message }}</pre></td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="6">No cases recorded.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>运行历史</h2>
+    <table>
+      <thead>
+        <tr><th>Run ID</th><th>详情</th></tr>
+      </thead>
+      <tbody>
+        {% if recent_runs %}
+          {% for run in recent_runs %}
+          <tr>
+            <td>{{ run.run_id }}</td>
+            <td><a href="{{ run.href }}">打开</a></td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="2">No historical runs.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</body>
+</html>
