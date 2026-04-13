@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -7,6 +8,7 @@ from typing import TYPE_CHECKING
 import cv2
 import numpy as np
 
+from framework.core.defaults import default_value
 from framework.core.exceptions import ImageMatchError
 from framework.core.logger import setup_logger
 
@@ -23,6 +25,7 @@ class ImageMatchResult:
     confidence: float
     top_left: tuple[int, int]
     bottom_right: tuple[int, int]
+    scale: float = 1.0
 
     @property
     def center(self) -> tuple[int, int]:
@@ -48,12 +51,16 @@ class ImageEngine:
         screenshot_dir: str | Path = "artifacts/report_data/screenshots",
         debug_dir: str | Path = "artifacts/report_data/image_debug",
         threshold: float = 0.92,
+        scales: Sequence[float] | None = None,
     ) -> None:
         self.driver = driver
         self.template_dir = Path(template_dir)
         self.screenshot_dir = Path(screenshot_dir)
         self.debug_dir = Path(debug_dir)
         self.threshold = threshold
+        self.scales = [
+            float(scale) for scale in (scales or default_value("framework.image_match_scales"))
+        ]
         self.logger = setup_logger(self.__class__.__name__)
 
     def click(
@@ -121,41 +128,50 @@ class ImageEngine:
             raise ImageMatchError(f"Failed to load image template: {template_path}")
 
         crop, offset = self._crop_region(screenshot, region)
-        if template.shape[0] > crop.shape[0] or template.shape[1] > crop.shape[1]:
+        candidates = list(self._scaled_templates(template, crop))
+        if not candidates:
             raise ImageMatchError(
-                f"Template '{template_path.name}' is larger than the search area."
+                "Template is larger than the search area: "
+                f"template_path={template_path}, screenshot_path={screenshot_path}, region={region}"
             )
 
-        method = self._select_match_method(template)
-        result = cv2.matchTemplate(crop, template, method)
-        min_confidence, max_confidence, min_location, max_location = cv2.minMaxLoc(result)
-        confidence, match_location = self._normalize_confidence(
-            method=method,
-            min_confidence=min_confidence,
-            max_confidence=max_confidence,
-            min_location=min_location,
-            max_location=max_location,
-        )
-        top_left = (match_location[0] + offset[0], match_location[1] + offset[1])
-        bottom_right = (
-            top_left[0] + template.shape[1],
-            top_left[1] + template.shape[0],
-        )
+        match_result: ImageMatchResult | None = None
+        for scale, scaled_template in candidates:
+            method = self._select_match_method(scaled_template)
+            result = cv2.matchTemplate(crop, scaled_template, method)
+            min_confidence, max_confidence, min_location, max_location = cv2.minMaxLoc(result)
+            confidence, match_location = self._normalize_confidence(
+                method=method,
+                min_confidence=min_confidence,
+                max_confidence=max_confidence,
+                min_location=min_location,
+                max_location=max_location,
+            )
+            top_left = (match_location[0] + offset[0], match_location[1] + offset[1])
+            bottom_right = (
+                top_left[0] + scaled_template.shape[1],
+                top_left[1] + scaled_template.shape[0],
+            )
+            candidate = ImageMatchResult(
+                template_path=str(template_path),
+                screenshot_path=str(screenshot_path),
+                confidence=float(confidence),
+                top_left=top_left,
+                bottom_right=bottom_right,
+                scale=scale,
+            )
+            if match_result is None or candidate.confidence > match_result.confidence:
+                match_result = candidate
 
-        match_result = ImageMatchResult(
-            template_path=str(template_path),
-            screenshot_path=str(screenshot_path),
-            confidence=float(confidence),
-            top_left=top_left,
-            bottom_right=bottom_right,
-        )
+        assert match_result is not None
         self._write_debug_image(screenshot, match_result, template_path.name, artifact_stem)
 
         if match_result.confidence < effective_threshold:
             raise ImageMatchError(
                 "Image match confidence below threshold: "
                 f"{match_result.confidence:.4f} < {effective_threshold:.4f} "
-                f"for template '{template_path.name}'"
+                f"for template '{template_path.name}' "
+                f"(template_path={template_path}, screenshot_path={screenshot_path}, region={region})"
             )
 
         self.logger.info(
@@ -165,6 +181,38 @@ class ImageEngine:
             match_result.center,
         )
         return match_result
+
+    def _scaled_templates(
+        self,
+        template: np.ndarray,
+        crop: np.ndarray,
+    ) -> list[tuple[float, np.ndarray]]:
+        """生成可用于匹配的模板尺度候选。"""
+
+        candidates: list[tuple[float, np.ndarray]] = []
+        seen_shapes: set[tuple[int, int]] = set()
+        crop_height, crop_width = crop.shape[:2]
+        for scale in self.scales:
+            if scale <= 0:
+                continue
+            if scale == 1.0:
+                scaled_template = template
+            else:
+                width = max(1, int(round(template.shape[1] * scale)))
+                height = max(1, int(round(template.shape[0] * scale)))
+                scaled_template = cv2.resize(
+                    template,
+                    (width, height),
+                    interpolation=cv2.INTER_LINEAR,
+                )
+            shape = (scaled_template.shape[0], scaled_template.shape[1])
+            if shape in seen_shapes:
+                continue
+            seen_shapes.add(shape)
+            if shape[0] > crop_height or shape[1] > crop_width:
+                continue
+            candidates.append((float(scale), scaled_template))
+        return candidates
 
     def _select_match_method(self, template: np.ndarray) -> int:
         """根据模板内容选择更合适的匹配算法。"""
@@ -259,7 +307,7 @@ class ImageEngine:
         )
         center_x, center_y = match_result.center
         cv2.circle(debug_image, (center_x, center_y), 6, color=(0, 0, 255), thickness=-1)
-        label = f"{template_name}: {match_result.confidence:.3f}"
+        label = f"{template_name}: {match_result.confidence:.3f} @ {match_result.scale:.3f}x"
         text_origin = (match_result.top_left[0], max(match_result.top_left[1] - 10, 20))
         cv2.putText(
             debug_image,

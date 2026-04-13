@@ -1,27 +1,26 @@
-"""结构化 HTML 报告生成器。
-
-这个模块负责把 pytest 执行结果整理成一套可浏览的静态报告页面：
-- 总览页
-- latest 最新报告
-- runs 历史运行报告
-- 单用例步骤详情页
-"""
+"""结构化 HTML 报告生成器。"""
 
 from __future__ import annotations
 
-import html
 import os
 import shutil
 import time
 from pathlib import Path
+from typing import Any
 
 import pytest
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from framework.reporting.runtime_store import get_case_report_store
+
+TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+CSS_FILE_NAME = "report.css"
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     """注册自定义命令行参数。"""
+
     group = parser.getgroup("framework-reporting")
     group.addoption(
         "--simple-html",
@@ -33,6 +32,7 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 
 def pytest_configure(config: pytest.Config) -> None:
     """在 pytest 启动时初始化报告上下文。"""
+
     report_path = config.getoption("--simple-html")
     if not report_path:
         return
@@ -55,6 +55,7 @@ def pytest_configure(config: pytest.Config) -> None:
 
 def get_simple_html_run_id(config: pytest.Config) -> str:
     """返回当前 pytest 会话的报告 run_id。"""
+
     state = getattr(config, "_framework_simple_html", None) or {}
     return str(state.get("run_id", ""))
 
@@ -68,6 +69,7 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo):
 
 def add_test_row(item: pytest.Item, call: pytest.CallInfo, report: pytest.TestReport) -> None:
     """把单次 setup/call/teardown 结果整理进报告缓存。"""
+
     html_state = getattr(item.config, "_framework_simple_html", None)
     if html_state is None:
         return
@@ -95,7 +97,7 @@ def add_test_row(item: pytest.Item, call: pytest.CallInfo, report: pytest.TestRe
     if postcheck:
         detail_blocks.append(f"[Environment Reset]\n{postcheck}")
 
-    existing = next((row for row in html_state["rows"] if row["nodeid"] == item.nodeid), None)
+    steps = list(store.get("steps", []))
     payload = {
         "nodeid": item.nodeid,
         "outcome": report.outcome.upper(),
@@ -107,12 +109,15 @@ def add_test_row(item: pytest.Item, call: pytest.CallInfo, report: pytest.TestRe
         "postcheck": postcheck,
         "baseline": str(store.get("baseline", "") or ""),
         "phase": report.when,
-        "steps": list(store.get("steps", [])),
+        "steps": steps,
+        "step_duration_ms": sum(int(step.get("duration_ms", 0) or 0) for step in steps),
     }
 
+    existing = next((row for row in html_state["rows"] if row["nodeid"] == item.nodeid), None)
     if report.when == "teardown" and existing is not None:
         existing["postcheck"] = postcheck or existing.get("postcheck", "")
-        existing["steps"] = list(store.get("steps", []))
+        existing["steps"] = steps
+        existing["step_duration_ms"] = payload["step_duration_ms"]
         existing["baseline"] = str(store.get("baseline", "") or existing.get("baseline", ""))
         if postcheck:
             message_parts = [
@@ -138,6 +143,7 @@ def add_test_row(item: pytest.Item, call: pytest.CallInfo, report: pytest.TestRe
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     """在测试会话结束时输出总览页、latest 页面和历史归档。"""
+
     html_state = getattr(session.config, "_framework_simple_html", None)
     if html_state is None:
         return
@@ -148,6 +154,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     rows = html_state["rows"]
     duration = time.time() - html_state["started_at"]
 
+    _write_report_css(run_root / CSS_FILE_NAME)
     cases = [_build_case_bundle(run_root, row) for row in rows]
     suite_html = _render_suite_page(
         cases=cases,
@@ -155,10 +162,10 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         subtitle=f"Run ID: {html_state['run_id']}",
         duration=duration,
         exitstatus=exitstatus,
-        case_link_prefix="cases",
         recent_runs=_recent_run_entries(
             reports_root, current_run_id=html_state["run_id"], relative_mode="run"
         ),
+        stylesheet_href=CSS_FILE_NAME,
     )
     (run_root / "index.html").write_text(suite_html, encoding="utf-8")
 
@@ -166,6 +173,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         shutil.rmtree(latest_root)
     shutil.copytree(run_root, latest_root)
 
+    _write_report_css(reports_root / CSS_FILE_NAME)
     latest_cases = [_build_case_summary_for_latest(case) for case in cases]
     latest_html = _render_suite_page(
         cases=latest_cases,
@@ -173,16 +181,16 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         subtitle=f"Latest run: {html_state['run_id']}",
         duration=duration,
         exitstatus=exitstatus,
-        case_link_prefix="latest/cases",
         recent_runs=_recent_run_entries(
             reports_root, current_run_id=html_state["run_id"], relative_mode="root"
         ),
+        stylesheet_href=CSS_FILE_NAME,
     )
     (reports_root / "index.html").write_text(latest_html, encoding="utf-8")
     html_state["path"].write_text(latest_html, encoding="utf-8")
 
 
-def _build_case_bundle(run_root: Path, row: dict) -> dict:
+def _build_case_bundle(run_root: Path, row: dict[str, Any]) -> dict[str, Any]:
     case_slug = _slugify(str(row["nodeid"]))
     case_dir = run_root / "cases" / case_slug
     screenshot_dir = case_dir / "screenshots"
@@ -196,6 +204,7 @@ def _build_case_bundle(run_root: Path, row: dict) -> dict:
         staged_steps.append(
             {
                 **step,
+                "duration_label": _duration_label(int(step.get("duration_ms", 0) or 0)),
                 "screenshot_rel": _stage_asset(
                     step.get("screenshot_path", ""), screenshot_dir, case_dir
                 ),
@@ -212,16 +221,17 @@ def _build_case_bundle(run_root: Path, row: dict) -> dict:
         "case_slug": case_slug,
         "case_dir": case_dir,
         "steps": staged_steps,
+        "step_duration_label": _duration_label(int(row.get("step_duration_ms", 0) or 0)),
         "screenshot_rel": _stage_asset(row.get("screenshot", ""), screenshot_dir, case_dir),
         "xml_rel": _stage_asset(row.get("xml", ""), source_dir, case_dir),
     }
 
-    case_html = _render_case_page(staged_case)
+    case_html = _render_case_page(staged_case, stylesheet_href="../../report.css")
     (case_dir / "index.html").write_text(case_html, encoding="utf-8")
     return staged_case
 
 
-def _build_case_summary_for_latest(case: dict) -> dict:
+def _build_case_summary_for_latest(case: dict[str, Any]) -> dict[str, Any]:
     latest_case = dict(case)
     latest_case["case_link"] = f"latest/cases/{case['case_slug']}/index.html"
     return latest_case
@@ -243,13 +253,13 @@ def _stage_asset(source: str, destination_dir: Path, case_dir: Path) -> str:
 
 def _render_suite_page(
     *,
-    cases: list[dict],
+    cases: list[dict[str, Any]],
     title: str,
     subtitle: str,
     duration: float,
     exitstatus: int,
-    case_link_prefix: str,
-    recent_runs: list[dict],
+    recent_runs: list[dict[str, str]],
+    stylesheet_href: str,
 ) -> str:
     total = len(cases)
     passed = sum(1 for case in cases if case["outcome"] == "PASSED")
@@ -257,184 +267,62 @@ def _render_suite_page(
     skipped = sum(1 for case in cases if case["outcome"] == "SKIPPED")
     success_rate = (passed / total * 100) if total else 0.0
 
-    case_rows = []
-    for case in cases:
-        color = {
-            "PASSED": "#166534",
-            "FAILED": "#b91c1c",
-            "SKIPPED": "#92400e",
-        }.get(case["outcome"], "#374151")
-        case_link = case.get("case_link") or f"{case_link_prefix}/{case['case_slug']}/index.html"
-        case_rows.append(
-            "<tr>"
-            f"<td><a href='{html.escape(case_link)}'>{html.escape(case['nodeid'])}</a></td>"
-            f"<td style='color:{color};font-weight:700'>{html.escape(case['outcome'])} ({html.escape(case['phase'])})</td>"
-            f"<td>{html.escape(case['duration'])}</td>"
-            f"<td>{len(case.get('steps', []))}</td>"
-            f"<td><pre style='white-space:pre-wrap;max-width:480px'>{html.escape(_shorten(case.get('message', '')))}</pre></td>"
-            "</tr>"
-        )
-
-    run_rows = []
-    for run in recent_runs:
-        run_rows.append(
-            "<tr>"
-            f"<td>{html.escape(run['run_id'])}</td>"
-            f"<td><a href='{html.escape(run['href'])}'>打开</a></td>"
-            "</tr>"
-        )
-
-    return f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <title>{html.escape(title)}</title>
-  <style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 32px; color: #111827; background:#f8fafc; }}
-    h1 {{ margin-bottom: 6px; }}
-    .subtitle {{ color:#4b5563; margin-bottom:24px; }}
-    .metrics {{ display:grid; grid-template-columns:repeat(5,minmax(140px,1fr)); gap:12px; margin-bottom:24px; }}
-    .card {{ background:white; border:1px solid #dbe2ea; border-radius:14px; padding:16px; }}
-    .metric-label {{ color:#6b7280; font-size:13px; }}
-    .metric-value {{ font-size:24px; font-weight:700; margin-top:6px; }}
-    table {{ width:100%; border-collapse: collapse; background:white; }}
-    th, td {{ border: 1px solid #d1d5db; padding: 10px; text-align: left; vertical-align: top; }}
-    th {{ background: #e5e7eb; }}
-    .section {{ margin-top:28px; }}
-  </style>
-</head>
-<body>
-  <h1>{html.escape(title)}</h1>
-  <div class="subtitle">{html.escape(subtitle)}</div>
-  <div class="metrics">
-    <div class="card"><div class="metric-label">总用例数</div><div class="metric-value">{total}</div></div>
-    <div class="card"><div class="metric-label">通过</div><div class="metric-value">{passed}</div></div>
-    <div class="card"><div class="metric-label">失败</div><div class="metric-value">{failed}</div></div>
-    <div class="card"><div class="metric-label">跳过</div><div class="metric-value">{skipped}</div></div>
-    <div class="card"><div class="metric-label">成功率</div><div class="metric-value">{success_rate:.1f}%</div></div>
-    <div class="card"><div class="metric-label">总耗时 / Exit</div><div class="metric-value">{duration:.2f}s / {exitstatus}</div></div>
-  </div>
-
-  <div class="section">
-    <h2>用例总览</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>用例</th><th>结果</th><th>耗时</th><th>步骤数</th><th>失败摘要 / 环境信息</th>
-        </tr>
-      </thead>
-      <tbody>
-        {"".join(case_rows) or '<tr><td colspan="5">No cases recorded.</td></tr>'}
-      </tbody>
-    </table>
-  </div>
-
-  <div class="section">
-    <h2>运行历史</h2>
-    <table>
-      <thead><tr><th>Run ID</th><th>详情</th></tr></thead>
-      <tbody>{"".join(run_rows) or '<tr><td colspan="2">No historical runs.</td></tr>'}</tbody>
-    </table>
-  </div>
-</body>
-</html>
-"""
+    return _render_template(
+        "suite.html.j2",
+        title=title,
+        subtitle=subtitle,
+        duration=f"{duration:.2f}s",
+        exitstatus=exitstatus,
+        stylesheet_href=stylesheet_href,
+        metrics={
+            "total": total,
+            "passed": passed,
+            "failed": failed,
+            "skipped": skipped,
+            "success_rate": f"{success_rate:.1f}%",
+        },
+        cases=cases,
+        recent_runs=recent_runs,
+    )
 
 
-def _render_case_page(case: dict) -> str:
-    color = {
-        "PASSED": "#166534",
-        "FAILED": "#b91c1c",
-        "SKIPPED": "#92400e",
-    }.get(case["outcome"], "#374151")
-
-    step_rows = []
-    for step in case.get("steps", []):
-        step_rows.append(
-            "<tr>"
-            f"<td>{step.get('index', '')}</td>"
-            f"<td>{html.escape(str(step.get('name', '')))}</td>"
-            f"<td style='color:{'#166534' if step.get('status') == 'PASSED' else '#b91c1c'};font-weight:700'>{html.escape(str(step.get('status', '')))}</td>"
-            f"<td>{html.escape(str(step.get('expected', '')))}</td>"
-            f"<td>{html.escape(str(step.get('actual', '')))}</td>"
-            f"<td>{html.escape(str(step.get('comparison', '')))}</td>"
-            f"<td><pre style='white-space:pre-wrap'>{html.escape(str(step.get('logs', '')))}</pre></td>"
-            f"<td><pre style='white-space:pre-wrap'>{html.escape(str(step.get('focus_window', '')))}</pre></td>"
-            f"<td>{_img_cell(step.get('previous_screenshot_rel', ''), '前一步截图')}</td>"
-            f"<td>{_img_cell(step.get('screenshot_rel', ''), '当前步骤截图')}</td>"
-            f"<td>{_img_cell(step.get('diff_rel', ''), '差异对比图')}</td>"
-            f"<td>{_link_cell(step.get('source_rel', ''), '页面层级')}</td>"
-            f"<td><pre style='white-space:pre-wrap'>{html.escape(str(step.get('detail', '')))}</pre></td>"
-            "</tr>"
-        )
-
-    return f"""<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="utf-8">
-  <title>{html.escape(case["nodeid"])}</title>
-  <style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; color: #111827; background:#f8fafc; }}
-    .topbar {{ margin-bottom:24px; }}
-    .summary {{ background:white; border:1px solid #dbe2ea; border-radius:14px; padding:16px; margin-bottom:20px; }}
-    table {{ width:100%; border-collapse: collapse; background:white; }}
-    th, td {{ border: 1px solid #d1d5db; padding: 10px; text-align: left; vertical-align: top; }}
-    th {{ background: #e5e7eb; }}
-    img {{ max-width:220px; border:1px solid #d1d5db; border-radius:8px; }}
-  </style>
-</head>
-<body>
-  <div class="topbar"><a href="../../index.html">返回套件总览</a></div>
-  <h1>{html.escape(case["nodeid"])}</h1>
-  <div class="summary">
-    <div>结果: <span style="color:{color};font-weight:700">{html.escape(case["outcome"])} ({html.escape(case["phase"])})</span></div>
-    <div>耗时: {html.escape(case["duration"])}</div>
-    <div>步骤数: {len(case.get("steps", []))}</div>
-    <div>基线定义: <code>{html.escape(str(case.get("baseline", "")) or "-")}</code></div>
-  </div>
-  <div class="summary">
-    <h3>失败原因 / 环境信息</h3>
-    <pre style='white-space:pre-wrap'>{html.escape(case.get("message", "")) or "-"}</pre>
-  </div>
-  <table>
-    <thead>
-      <tr>
-        <th>#</th><th>步骤</th><th>状态</th><th>预期</th><th>实际</th><th>对比</th><th>步骤日志</th><th>当前焦点窗口</th><th>前一步截图</th><th>当前截图</th><th>差异图</th><th>页面层级</th><th>说明</th>
-      </tr>
-    </thead>
-    <tbody>
-      {"".join(step_rows) or '<tr><td colspan="13">No step rows recorded.</td></tr>'}
-    </tbody>
-  </table>
-</body>
-</html>
-"""
+def _render_case_page(case: dict[str, Any], *, stylesheet_href: str) -> str:
+    return _render_template(
+        "case.html.j2",
+        case=case,
+        stylesheet_href=stylesheet_href,
+    )
 
 
-def _img_cell(rel_path: str, alt: str) -> str:
-    if not rel_path:
+def _render_template(template_name: str, **context: Any) -> str:
+    env = Environment(
+        loader=FileSystemLoader(TEMPLATES_DIR),
+        autoescape=select_autoescape(("html", "xml")),
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    return env.get_template(template_name).render(**context)
+
+
+def _write_report_css(target: Path) -> None:
+    target.write_text((ASSETS_DIR / CSS_FILE_NAME).read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def _duration_label(duration_ms: int) -> str:
+    if duration_ms <= 0:
         return "-"
-    return f'<a href="{html.escape(rel_path)}"><img src="{html.escape(rel_path)}" alt="{html.escape(alt)}" /></a>'
-
-
-def _link_cell(rel_path: str, label: str) -> str:
-    if not rel_path:
-        return "-"
-    return f'<a href="{html.escape(rel_path)}">{html.escape(label)}</a>'
+    if duration_ms >= 1000:
+        return f"{duration_ms / 1000:.2f}s"
+    return f"{duration_ms}ms"
 
 
 def _slugify(value: str) -> str:
     return "".join(char if char.isalnum() else "_" for char in value).strip("_").lower() or "case"
 
 
-def _shorten(message: str, limit: int = 280) -> str:
-    stripped = message.strip()
-    if len(stripped) <= limit:
-        return stripped
-    return stripped[: limit - 3] + "..."
-
-
-def _recent_run_entries(reports_root: Path, current_run_id: str, relative_mode: str) -> list[dict]:
+def _recent_run_entries(
+    reports_root: Path, current_run_id: str, relative_mode: str
+) -> list[dict[str, str]]:
     runs_root = reports_root / "runs"
     if not runs_root.exists():
         return []

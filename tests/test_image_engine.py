@@ -4,28 +4,11 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+import pytest
 
 from framework.core.exceptions import ImageMatchError
 from framework.vision.image_engine import ImageEngine
-
-
-class FakeDriver:
-    def __init__(self, screenshot_source: Path) -> None:
-        self.screenshot_source = screenshot_source
-        self.clicked_point: tuple[int, int] | None = None
-        self.sequence = 0
-
-    def screenshot(self, path: str | Path) -> str:
-        image = cv2.imread(str(self.screenshot_source), cv2.IMREAD_COLOR)
-        cv2.imwrite(str(path), image)
-        return str(path)
-
-    def click_point(self, x: int, y: int) -> None:
-        self.clicked_point = (x, y)
-
-    def build_artifact_name(self, base_name: str, *, category: str = "artifact") -> str:
-        self.sequence += 1
-        return f"run_case_{category}_{self.sequence:03d}_{base_name}"
+from tests.fakes import FakeImageDriver
 
 
 def test_image_engine_match_and_click(tmp_path: Path) -> None:
@@ -41,7 +24,7 @@ def test_image_engine_match_and_click(tmp_path: Path) -> None:
     cv2.imwrite(str(screenshot_path), screenshot)
     cv2.imwrite(str(template_path), template)
 
-    driver = FakeDriver(screenshot_path)
+    driver = FakeImageDriver(screenshot_path)
     engine = ImageEngine(
         driver=driver,
         template_dir=template_dir,
@@ -75,7 +58,7 @@ def test_image_engine_raises_when_confidence_too_low(tmp_path: Path) -> None:
     cv2.imwrite(str(screenshot_path), mismatched_screenshot)
     cv2.imwrite(str(template_path), template)
 
-    driver = FakeDriver(screenshot_path)
+    driver = FakeImageDriver(screenshot_path)
     engine = ImageEngine(
         driver=driver,
         template_dir=template_dir,
@@ -87,7 +70,10 @@ def test_image_engine_raises_when_confidence_too_low(tmp_path: Path) -> None:
     try:
         engine.match("missing_button")
     except ImageMatchError as exc:
-        assert "below threshold" in str(exc)
+        message = str(exc)
+        assert "below threshold" in message
+        assert str(template_path) in message
+        assert "run_case_image_match_001_missing_button.png" in message
     else:
         raise AssertionError("Expected ImageMatchError when confidence is below threshold.")
 
@@ -104,7 +90,7 @@ def test_image_engine_uses_unique_artifact_names(tmp_path: Path) -> None:
     cv2.imwrite(str(screenshot_path), screenshot)
     cv2.imwrite(str(template_dir / "search_button.png"), template)
 
-    driver = FakeDriver(screenshot_path)
+    driver = FakeImageDriver(screenshot_path)
     engine = ImageEngine(
         driver=driver,
         template_dir=template_dir,
@@ -121,3 +107,33 @@ def test_image_engine_uses_unique_artifact_names(tmp_path: Path) -> None:
     assert "run_case_image_match_002_step_b" in second.screenshot_path
     assert (tmp_path / "debug" / "run_case_image_match_001_step_a_debug.png").exists()
     assert (tmp_path / "debug" / "run_case_image_match_002_step_b_debug.png").exists()
+
+
+def test_image_engine_matches_scaled_template(tmp_path: Path) -> None:
+    screenshot = np.zeros((100, 100, 3), dtype=np.uint8)
+    screenshot[30:55, 40:65] = (255, 255, 255)
+    screenshot[36:49, 47:58] = (0, 0, 0)
+    full_patch = screenshot[30:55, 40:65].copy()
+    template = cv2.resize(full_patch, (20, 20), interpolation=cv2.INTER_LINEAR)
+
+    screenshot_path = tmp_path / "screen.png"
+    template_dir = tmp_path / "templates"
+    template_dir.mkdir()
+    template_path = template_dir / "scaled_button.png"
+    cv2.imwrite(str(screenshot_path), screenshot)
+    cv2.imwrite(str(template_path), template)
+
+    driver = FakeImageDriver(screenshot_path)
+    engine = ImageEngine(
+        driver=driver,
+        template_dir=template_dir,
+        screenshot_dir=tmp_path / "shots",
+        debug_dir=tmp_path / "debug",
+        threshold=0.8,
+        scales=[1.0, 1.25],
+    )
+
+    result = engine.match("scaled_button")
+
+    assert result.scale == pytest.approx(1.25)
+    assert result.center == (52, 42)

@@ -17,7 +17,7 @@
 - `steps`: 测试步骤
 - `expected`: 预期结果
 - `python_calls`: 如果已经知道框架方法调用，可以直接写 Python 语句
-- `markers`: 例如 `smoke,device`
+- `markers`: 例如 `smoke,device` 或 `smoke,feature("search")`
 - `ai_notes`: 给 AI 的补充说明
 
 ## 录入要求
@@ -81,3 +81,13 @@ assert via_baidu_page.is_result_loaded("chatgpt")
 - 同一条用例长期保持同一个 `case_id`
 - 真的要废弃一条用例时，直接从表里删掉这行
 - 不要把不同业务场景反复复用同一个 `case_id`
+
+### 7. `markers` 支持参数化 marker
+
+当前生成器会原样渲染 marker，所以除了 `smoke`、`device` 之外，也可以写：
+
+- `slow`
+- `flaky`
+- `feature("search")`
+
+推荐业务标签优先使用 `feature("模块名")` 这种形式，便于后续按功能维度筛选执行。

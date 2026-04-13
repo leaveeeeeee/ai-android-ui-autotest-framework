@@ -52,3 +52,22 @@ class Locator:
             "region": self.image_region,
             "threshold": self.image_threshold,
         }
+
+    def describe(self) -> str:
+        """返回便于排障的定位器摘要。"""
+
+        parts = [
+            f"name={self.name!r}",
+            f"strategy={self.strategy!r}",
+            f"value={self.value!r}",
+        ]
+        if self.timeout is not None:
+            parts.append(f"timeout={self.timeout}")
+        if self.fallback:
+            fallback_names = ", ".join(repr(locator.name) for locator in self.fallback)
+            parts.append(f"fallbacks=[{fallback_names}]")
+        if self.image_template:
+            parts.append(f"image_template={self.image_template!r}")
+        if self.image_threshold is not None:
+            parts.append(f"image_threshold={self.image_threshold}")
+        return ", ".join(parts)

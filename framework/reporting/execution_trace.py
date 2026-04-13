@@ -27,6 +27,7 @@ class ExecutionStep:
     previous_screenshot_path: str = ""
     diff_path: str = ""
     source_path: str = ""
+    duration_ms: int = 0
 
     def as_dict(self) -> dict[str, str | int]:
         """转换成可写入报告的数据字典。"""
@@ -69,6 +70,7 @@ class ExecutionTraceRecorder:
         previous_screenshot_path: str = "",
         diff_path: str = "",
         source_path: str = "",
+        duration_ms: int = 0,
     ) -> dict[str, str | int]:
         """追加一步执行记录。"""
         step = ExecutionStep(
@@ -85,6 +87,7 @@ class ExecutionTraceRecorder:
             previous_screenshot_path=previous_screenshot_path,
             diff_path=diff_path,
             source_path=source_path,
+            duration_ms=duration_ms,
         ).as_dict()
         self.steps.append(step)
         if screenshot_path:

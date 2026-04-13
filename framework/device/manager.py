@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass
-from typing import Any, Callable
+from dataclasses import dataclass, field
+from typing import Any
 
 from framework.core.config import ConfigManager
+from framework.core.defaults import default_value
 from framework.core.driver import DriverAdapter
 from framework.core.exceptions import DeviceConnectionError
+from framework.core.waiter import Waiter
 from framework.device.adb import AdbClient, DeviceSnapshot
 
 
@@ -15,23 +16,42 @@ class DeviceManager:
     """统一管理设备级前后置动作。"""
 
     config: ConfigManager
+    waiter: Waiter = field(init=False, repr=False)
+    _adb_client: AdbClient | None = field(default=None, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        timeout = float(
+            self.config.get("framework.default_timeout", default_value("framework.default_timeout"))
+        )
+        interval = float(
+            self.config.get(
+                "framework.default_retry_interval",
+                default_value("framework.default_retry_interval"),
+            )
+        )
+        self.waiter = Waiter(timeout=timeout, interval=interval)
+
+    @property
+    def serial(self) -> str:
+        """返回当前配置的设备序列号。"""
+
+        return str(self.config.get("device.serial", "") or "")
 
     def build_driver(self) -> DriverAdapter:
         """基于当前配置构建 `DriverAdapter`。"""
-        serial = self.config.get("device.serial", "")
-        timeout = float(self.config.get("framework.default_timeout", 10))
-        interval = float(self.config.get("framework.default_retry_interval", 0.5))
         framework_config = self.config.get("framework", {}) or {}
         return DriverAdapter(
-            serial=serial,
-            default_timeout=timeout,
-            retry_interval=interval,
+            serial=self.serial,
+            default_timeout=self.waiter.timeout,
+            retry_interval=self.waiter.interval,
             framework_config=framework_config,
         )
 
     def adb(self) -> AdbClient:
         """构建 ADB 客户端。"""
-        return AdbClient(serial=self.config.get("device.serial", ""))
+        if self._adb_client is None:
+            self._adb_client = AdbClient(serial=self.serial)
+        return self._adb_client
 
     def prepare_test_environment(self) -> list[str]:
         """执行用例前置检查并恢复基线环境。"""
@@ -40,7 +60,10 @@ class DeviceManager:
         adb.wait_for_device()
         state = adb.get_state()
         if state != "device":
-            raise DeviceConnectionError(f"ADB device state is '{state}', expected 'device'.")
+            raise DeviceConnectionError(
+                "ADB device state is "
+                f"{state!r} for serial {self.serial or 'default'}, expected 'device'."
+            )
         details.append(f"adb_state={state}")
 
         before_snapshot = adb.current_focus_state()
@@ -52,7 +75,10 @@ class DeviceManager:
         if package:
             installed = adb.is_package_installed(package)
             if not installed:
-                raise DeviceConnectionError(f"Required package is not installed: {package}")
+                raise DeviceConnectionError(
+                    "Required package is not installed: "
+                    f"package={package}, serial={self.serial or 'default'}"
+                )
             details.append(f"package_installed={package}")
 
         details.extend(self.reset_to_baseline())
@@ -101,18 +127,20 @@ class DeviceManager:
                 f"baseline_started={baseline_package}/{baseline_activity}"
                 + (f" url={baseline_url}" if baseline_url else "")
             )
-            self._wait_until(
+            self.waiter.until_true(
                 lambda: self._is_target_focus(
                     adb.current_focus_state(),
                     package=baseline_package,
                     activity=baseline_activity,
                 ),
+                message=(
+                    "Failed to reach configured baseline page: "
+                    f"{baseline_package}/{baseline_activity} "
+                    f"for serial {self.serial or 'default'}"
+                ),
                 timeout=8.0,
                 interval=0.3,
-                failure_message=(
-                    "Failed to reach configured baseline page: "
-                    f"{baseline_package}/{baseline_activity}"
-                ),
+                exception_cls=DeviceConnectionError,
             )
 
         details.extend(self._snapshot_lines("after_reset", adb.current_focus_state()))
@@ -138,11 +166,12 @@ class DeviceManager:
         snapshot = adb.current_focus_state()
         if not snapshot.screen_on:
             adb.wake_up()
-            self._wait_until(
+            self.waiter.until_true(
                 adb.screen_is_on,
+                message=f"Failed to wake screen for serial {self.serial or 'default'}.",
                 timeout=5.0,
                 interval=0.2,
-                failure_message="Failed to wake screen.",
+                exception_cls=DeviceConnectionError,
             )
             details.append("screen_awake=true")
         else:
@@ -161,22 +190,27 @@ class DeviceManager:
             if snapshot.keyboard_visible:
                 adb.press_back()
                 details.append("dismiss_keyboard=back")
-                self._wait_until(
+                self.waiter.until_true(
                     lambda: not adb.is_keyboard_visible(),
+                    message=f"Failed to dismiss keyboard for serial {self.serial or 'default'}.",
                     timeout=2.0,
                     interval=0.2,
-                    failure_message="Failed to dismiss keyboard.",
+                    exception_cls=DeviceConnectionError,
                 )
                 continue
 
             if self._is_transient_package(snapshot.package):
                 adb.close_system_dialogs()
                 details.append(f"close_system_dialogs={snapshot.package or 'unknown'}")
-                self._wait_until(
+                self.waiter.until_true(
                     lambda: not self._is_transient_package(adb.current_focus_state().package),
+                    message=(
+                        "Failed to close system transient layer "
+                        f"for serial {self.serial or 'default'}."
+                    ),
                     timeout=2.0,
                     interval=0.2,
-                    failure_message="Failed to close system transient layer.",
+                    exception_cls=DeviceConnectionError,
                 )
                 continue
 
@@ -193,11 +227,12 @@ class DeviceManager:
 
         adb.start_home()
         details.append("home_intent_sent=true")
-        self._wait_until(
+        self.waiter.until_true(
             lambda: self._is_home_focus(adb.current_focus_state()),
+            message=f"Failed to return to launcher home for serial {self.serial or 'default'}.",
             timeout=5.0,
             interval=0.3,
-            failure_message="Failed to return to launcher home.",
+            exception_cls=DeviceConnectionError,
         )
         details.extend(self._snapshot_lines("home_ready", adb.current_focus_state()))
         return details
@@ -212,41 +247,18 @@ class DeviceManager:
             f"{prefix}.screen_on={snapshot.screen_on}",
         ]
 
-    def _wait_until(
-        self,
-        predicate: Callable[[], bool],
-        *,
-        timeout: float,
-        interval: float,
-        failure_message: str,
-    ) -> None:
-        """轮询等待某个条件成立。"""
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            if predicate():
-                return
-            time.sleep(interval)
-        raise DeviceConnectionError(failure_message)
-
     def _is_home_focus(self, snapshot: DeviceSnapshot) -> bool:
         """判断当前焦点是否已经是桌面。"""
-        home_packages = {
-            "com.miui.home",
-            "com.android.launcher",
-            "com.android.launcher3",
-            "com.google.android.apps.nexuslauncher",
-        }
+        home_packages = set(
+            self.config.get("device.home_packages", default_value("device.home_packages"))
+        )
         return snapshot.package in home_packages and not snapshot.keyboard_visible
 
     def _is_transient_package(self, package: str) -> bool:
         """判断当前前台是否为系统临时层。"""
-        transient_packages = {
-            "com.android.systemui",
-            "com.android.permissioncontroller",
-            "com.google.android.permissioncontroller",
-            "com.miui.securitycenter",
-            "com.miui.guardprovider",
-        }
+        transient_packages = set(
+            self.config.get("device.transient_packages", default_value("device.transient_packages"))
+        )
         return package in transient_packages
 
     def _is_target_focus(

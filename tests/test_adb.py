@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import subprocess
 
-from framework.device.adb import AdbClient
+from framework.device.adb import AdbClient, parse_focus_state
 
 
 def test_adb_client_parses_focus_state_and_keyboard(monkeypatch):
@@ -56,3 +56,22 @@ def test_adb_client_parses_focus_state_and_keyboard(monkeypatch):
         "-d",
         "https://www.baidu.com",
     ]
+
+
+def test_parse_focus_state_is_pure_and_reusable() -> None:
+    snapshot = parse_focus_state(
+        window_output=(
+            "mCurrentFocus=Window{1 u0 mark.via/.Shell}\n"
+            "mFocusedApp=AppWindowToken{ mark.via/.Shell }\n"
+            "Window #3 Window{99 u0 InputMethod}:\n"
+            "  mViewVisibility=0x0\n"
+            "  mHasSurface=true isReadyForDisplay()=true\n"
+            "  isVisible=true\n"
+        ),
+        power_output="Display Power: state=OFF\nmWakefulness=Asleep\n",
+    )
+
+    assert snapshot.package == "mark.via"
+    assert snapshot.activity == ".Shell"
+    assert snapshot.keyboard_visible is True
+    assert snapshot.screen_on is False

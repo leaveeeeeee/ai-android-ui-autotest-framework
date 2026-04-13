@@ -33,7 +33,7 @@ uiauto/
 ### 目录职责
 
 - `framework/`: 真正的框架代码。以后看核心能力，直接进这里。
-- `tests/`: pytest 用例和公共 fixture。
+- `tests/`: pytest 用例、极薄的 `conftest.py` 注册入口，以及测试专用 fake/stub。
 - `scripts/`: 运行用例、生成报告、生成文本用例等脚本。
 - `docs/`: 接口说明、用例录入规范、GitHub 接入说明。
 - `artifacts/reports/`: 只放最终可查看的报告入口和历史运行报告。
@@ -46,14 +46,16 @@ uiauto/
 ```mermaid
 flowchart TD
     A[配置 config.yaml] --> B[执行 pytest 或运行脚本]
-    B --> C[conftest 初始化 fixture]
-    C --> D[DeviceManager 做前置检查]
-    D --> E[Page Object 调用 DriverAdapter]
-    E --> F[uiautomator2 操作设备]
-    E --> G[ImageEngine 图像兜底]
-    F --> H[record_step 记录步骤]
-    G --> H
-    H --> I[生成 reports 和 report_data]
+    B --> C[tests/conftest.py 注册 framework.pytest_plugin]
+    C --> D[pytest_plugin 加载 fixtures 和 reporting hooks]
+    D --> E[DeviceManager 做前置检查]
+    E --> F[Page Object 调用 DriverAdapter]
+    F --> G[uiautomator2 操作设备]
+    F --> H[ImageEngine 多尺度图像兜底]
+    G --> I[record_step 记录步骤和耗时]
+    H --> I
+    I --> J[runtime_store + pytest-html/Allure 附件]
+    J --> K[生成 reports 和 report_data]
 ```
 
 详细流程图见：
@@ -86,15 +88,17 @@ flowchart TD
 - 公共后置：执行后按状态收敛到统一初始状态，不再依赖固定 `sleep + back/home/back`
 - 页面对象：业务语义方法集中在 `framework/pages/`
 - 图像兜底：`Locator` 支持显式声明 `image_template / image_region / image_threshold`
+- 图像兜底：`ImageEngine` 支持多尺度模板匹配，适配常见分辨率缩放
 - 文本生成用例：支持 `csv/xlsx` 转 pytest；信息不完整时可同时产出 AI prompt，并自动清理当前输入源的过期生成文件
-- 报告链路：结构化 HTML + `pytest-html` + Allure results，HTML 报告已改为结构化数据驱动
+- 报告链路：结构化 HTML + `pytest-html` + Allure results；其中 `runtime_store` 主要服务结构化 HTML，另外两条链路通过 pytest hook 附件补充现场信息
+- 执行边界：单 `serial` 真机语义，`device` 用例不支持 `pytest-xdist` 并行执行
 
 ## 快速开始
 
 1. 安装依赖
 
 ```bash
-python -m venv .venv
+'/Volumes/SD Card/从入门到 recode/解释器/bin/python' -m venv .venv
 source .venv/bin/activate
 pip install -e .
 ```
@@ -129,6 +133,12 @@ artifacts/reports/index.html
 PYTHON_BIN="/Volumes/SD Card/从入门到 recode/解释器/bin/python" ./scripts/install_git_hooks.sh
 ```
 
+7. 运行纯单测时可以并行，但真机用例不要加 `-n`
+
+```bash
+'/Volumes/SD Card/从入门到 recode/解释器/bin/python' -m pytest tests -m "not device"
+```
+
 Allure 原始结果会固定写到：
 
 ```text
@@ -149,12 +159,14 @@ artifacts/report_data/allure-report/
 
 这个场景会通过 Via 浏览器打开 `https://www.baidu.com`，输入 `chatgpt`，点击搜索并校验结果页。
 
+如果要跑真机用例，请保持单 worker。框架会在检测到 `device` 用例配合 `pytest-xdist` 时直接报错，避免多个 worker 争抢同一台设备。
+
 ## 文本生成用例
 
 结构化文本直接生成：
 
 ```bash
-python scripts/generate_cases_from_excel.py examples/case_inputs/test_cases_template.csv
+'/Volumes/SD Card/从入门到 recode/解释器/bin/python' scripts/generate_cases_from_excel.py examples/case_inputs/test_cases_template.csv
 ```
 
 如果录入文本缺少 `python_calls`，脚本会同时生成 AI prompt 到：
@@ -210,7 +222,10 @@ ghcr.io/leaveeeeeee/ai-android-ui-autotest-framework
 ## 关键文件入口
 
 - 配置：[config/config.yaml](/Volumes/SD%20Card/从入门到%20recode/uiauto/config/config.yaml)
-- 公共 fixture：[tests/conftest.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/tests/conftest.py)
+- pytest 注册入口：[tests/conftest.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/tests/conftest.py)
+- pytest 插件总入口：[framework/pytest_plugin.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_plugin.py)
+- fixture 定义：[framework/pytest_fixtures.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_fixtures.py)
+- 生命周期与失败采集：[framework/reporting/hooks.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/reporting/hooks.py)
 - Driver：[framework/core/driver.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/driver.py)
 - 设备管理：[framework/device/manager.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/device/manager.py)
 - 报告生成：[framework/reporting/simple_html.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/reporting/simple_html.py)

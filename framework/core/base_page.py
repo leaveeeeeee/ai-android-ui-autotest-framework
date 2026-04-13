@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from framework.core.defaults import setting_from_mapping
 from framework.core.driver import DriverAdapter
 from framework.core.exceptions import ElementNotFoundError
 from framework.core.locator import Locator
@@ -24,14 +25,11 @@ class BasePage:
         self.driver = driver
         self.image_engine = image_engine or ImageEngine(
             driver=driver,
-            template_dir=driver.framework_config.get("image_template_dir", "assets/images"),
-            screenshot_dir=driver.framework_config.get(
-                "screenshot_dir", "artifacts/report_data/screenshots"
-            ),
-            debug_dir=driver.framework_config.get(
-                "image_debug_dir", "artifacts/report_data/image_debug"
-            ),
-            threshold=float(driver.framework_config.get("image_match_threshold", 0.92)),
+            template_dir=setting_from_mapping(driver.framework_config, "image_template_dir"),
+            screenshot_dir=setting_from_mapping(driver.framework_config, "screenshot_dir"),
+            debug_dir=setting_from_mapping(driver.framework_config, "image_debug_dir"),
+            threshold=float(setting_from_mapping(driver.framework_config, "image_match_threshold")),
+            scales=setting_from_mapping(driver.framework_config, "image_match_scales"),
         )
         self.logger = setup_logger(self.__class__.__name__)
 
@@ -117,12 +115,8 @@ class BasePage:
         - 失败截图
         - 页面层级 XML
         """
-        screenshot_dir = Path(
-            self.driver.framework_config.get("screenshot_dir", "artifacts/report_data/screenshots")
-        )
-        source_dir = Path(
-            self.driver.framework_config.get("page_source_dir", "artifacts/report_data/page_source")
-        )
+        screenshot_dir = Path(setting_from_mapping(self.driver.framework_config, "screenshot_dir"))
+        source_dir = Path(setting_from_mapping(self.driver.framework_config, "page_source_dir"))
         artifact_name = self.driver.build_artifact_name(case_name, category="failure")
         screenshot_path = screenshot_dir / f"{artifact_name}.png"
         source_path = source_dir / f"{artifact_name}.xml"
