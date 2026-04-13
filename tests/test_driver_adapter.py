@@ -101,3 +101,79 @@ def test_driver_record_step_includes_duration() -> None:
 
     assert recorder.records
     assert isinstance(recorder.records[0]["duration_ms"], int)
+
+
+def test_driver_record_step_skips_capture_when_disabled(tmp_path: Path) -> None:
+    driver = DriverAdapter(
+        serial="SER123",
+        framework_config={
+            "screenshot_dir": str(tmp_path / "screenshots"),
+            "page_source_dir": str(tmp_path / "page_source"),
+        },
+    )
+    driver._device = FakeCaptureDevice()
+    recorder = FakeStepRecorder()
+    driver.set_step_recorder(recorder)
+
+    driver.record_step(name="不截图步骤", capture=False)
+
+    assert recorder.records[0]["screenshot_path"] == ""
+    assert recorder.records[0]["source_path"] == ""
+    assert not (tmp_path / "screenshots").exists()
+
+
+def test_driver_record_step_creates_diff_from_previous_screenshot(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    diff_calls: list[tuple[str, str, str]] = []
+
+    def fake_create_diff_image(before: str, after: str, output: str) -> None:
+        diff_calls.append((before, after, output))
+        Path(output).write_bytes(b"diff")
+
+    monkeypatch.setattr("framework.core.step_capture.create_diff_image", fake_create_diff_image)
+
+    previous = tmp_path / "previous.png"
+    previous.write_bytes(b"previous")
+    driver = DriverAdapter(
+        serial="SER123",
+        framework_config={
+            "screenshot_dir": str(tmp_path / "screenshots"),
+            "page_source_dir": str(tmp_path / "page_source"),
+        },
+    )
+    driver._device = FakeCaptureDevice()
+    recorder = FakeStepRecorder()
+    recorder.last_screenshot_path = str(previous)
+    driver.set_step_recorder(recorder)
+    driver.set_runtime_context(run_id="run_001", case_name="tests_case")
+
+    driver.record_step(name="截图步骤", capture=True)
+
+    assert diff_calls
+    assert diff_calls[0][0] == str(previous)
+    assert recorder.records[0]["previous_screenshot_path"] == str(previous)
+    assert recorder.records[0]["diff_path"].endswith("_diff.png")
+    assert Path(str(recorder.records[0]["diff_path"])).exists()
+
+
+def test_driver_record_step_ignores_context_provider_errors(tmp_path: Path) -> None:
+    driver = DriverAdapter(
+        serial="SER123",
+        framework_config={
+            "screenshot_dir": str(tmp_path / "screenshots"),
+            "page_source_dir": str(tmp_path / "page_source"),
+        },
+    )
+    driver._device = FakeCaptureDevice()
+    recorder = FakeStepRecorder()
+    driver.set_step_recorder(recorder)
+
+    def broken_context() -> dict[str, str]:
+        raise RuntimeError("provider failed")
+
+    driver.set_step_context_provider(broken_context)
+    driver.record_step(name="上下文异常步骤", capture=False)
+
+    assert recorder.records[0]["focus_window"] == ""

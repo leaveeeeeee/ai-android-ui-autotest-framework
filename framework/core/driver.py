@@ -5,19 +5,14 @@ import time
 from pathlib import Path
 from typing import Any
 
+from framework.core.artifact_manager import ArtifactManager
 from framework.core.defaults import setting_from_mapping
 from framework.core.exceptions import DeviceConnectionError, ElementNotFoundError
 from framework.core.locator import Locator
 from framework.core.logger import init_logging, setup_logger
 from framework.core.protocols import StepContextProvider, StepRecorder
+from framework.core.step_capture import StepCaptureService
 from framework.core.waiter import Waiter
-from framework.reporting.image_tools import annotate_click_region, create_diff_image
-
-
-def _sanitize_artifact_name(value: str) -> str:
-    """把任意名称转换成稳定、可做文件名的片段。"""
-    normalized = re.sub(r"[^a-zA-Z0-9_]+", "_", value.strip()).strip("_").lower()
-    return normalized or "artifact"
 
 
 class DriverAdapter:
@@ -44,8 +39,8 @@ class DriverAdapter:
         self.step_recorder: StepRecorder | None = None
         self.step_context_provider: StepContextProvider | None = None
         self._device = None
-        self._runtime_context: dict[str, str] = {}
-        self._artifact_sequence = 0
+        self.artifact_manager = ArtifactManager(self.framework_config)
+        self.step_capture = StepCaptureService(self.artifact_manager)
         self.click_retry_count = int(
             setting_from_mapping(self.framework_config, "click_retry_count")
         )
@@ -233,19 +228,18 @@ class DriverAdapter:
     def set_step_context_provider(self, provider: StepContextProvider | None) -> None:
         """注入步骤上下文提供器，比如当前焦点窗口。"""
         self.step_context_provider = provider
+        self.step_capture.set_context_provider(provider)
 
     def set_runtime_context(self, **context: str) -> None:
         """设置当前用例的运行时上下文。
 
         运行时上下文会参与截图、页面层级、图像调试图的唯一命名。
         """
-        self._runtime_context = {key: str(value) for key, value in context.items() if value}
-        self._artifact_sequence = 0
+        self.artifact_manager.set_runtime_context(**context)
 
     def clear_runtime_context(self) -> None:
         """清空运行时上下文。"""
-        self._runtime_context = {}
-        self._artifact_sequence = 0
+        self.artifact_manager.clear_runtime_context()
 
     def build_artifact_name(self, base_name: str, *, category: str = "artifact") -> str:
         """生成唯一产物名。
@@ -257,15 +251,7 @@ class DriverAdapter:
         - 全局序号
         - 业务语义名
         """
-        self._artifact_sequence += 1
-        parts = [
-            self._runtime_context.get("run_id", ""),
-            self._runtime_context.get("case_name", ""),
-            _sanitize_artifact_name(category),
-            f"{self._artifact_sequence:03d}",
-            _sanitize_artifact_name(base_name),
-        ]
-        return "_".join(part for part in parts if part)
+        return self.artifact_manager.build_artifact_name(base_name, category=category)
 
     def get_bounds(self, locator: Locator) -> tuple[int, int, int, int] | None:
         """获取元素边界框，常用于高亮截图中的操作区域。"""
@@ -279,17 +265,11 @@ class DriverAdapter:
         - 截图路径
         - 页面层级 XML 路径
         """
-        screenshot_dir = Path(setting_from_mapping(self.framework_config, "screenshot_dir"))
-        source_dir = Path(setting_from_mapping(self.framework_config, "page_source_dir"))
-        screenshot_dir.mkdir(parents=True, exist_ok=True)
-        source_dir.mkdir(parents=True, exist_ok=True)
-
-        safe_name = self.build_artifact_name(name, category="state")
-        screenshot_path = screenshot_dir / f"{safe_name}.png"
-        source_path = source_dir / f"{safe_name}.xml"
-        self.screenshot(screenshot_path)
-        source_path.write_text(self.page_source(), encoding="utf-8")
-        return str(screenshot_path), str(source_path)
+        return self.artifact_manager.capture_state(
+            name=name,
+            screenshotter=self.screenshot,
+            page_source_provider=self.page_source,
+        )
 
     def record_step(
         self,
@@ -317,27 +297,14 @@ class DriverAdapter:
             return
 
         started_at = time.perf_counter()
-        screenshot_path = ""
-        previous_screenshot_path = self.step_recorder.last_screenshot_path
-        diff_path = ""
-        source_path = ""
-        focus_window = ""
-        if self.step_context_provider is not None:
-            try:
-                context = self.step_context_provider() or {}
-                focus_window = str(context.get("focus_window", "") or "")
-            except Exception:
-                focus_window = ""
-        if capture:
-            step_file_name = self.step_recorder.next_step_name(name)
-            screenshot_path, source_path = self.capture_state(step_file_name)
-            if highlight_rect is not None:
-                annotate_click_region(screenshot_path, highlight_rect)
-            if previous_screenshot_path:
-                diff_path = str(
-                    Path(screenshot_path).with_name(f"{Path(screenshot_path).stem}_diff.png")
-                )
-                create_diff_image(previous_screenshot_path, screenshot_path, diff_path)
+        capture_result = self.step_capture.collect(
+            recorder=self.step_recorder,
+            name=name,
+            highlight_rect=highlight_rect,
+            capture=capture,
+            screenshotter=self.screenshot,
+            page_source_provider=self.page_source,
+        )
 
         self.step_recorder.add_step(
             name=name,
@@ -347,11 +314,11 @@ class DriverAdapter:
             actual=actual,
             comparison=comparison,
             logs=logs,
-            focus_window=focus_window,
-            screenshot_path=screenshot_path,
-            previous_screenshot_path=previous_screenshot_path,
-            diff_path=diff_path,
-            source_path=source_path,
+            focus_window=capture_result.focus_window,
+            screenshot_path=capture_result.screenshot_path,
+            previous_screenshot_path=capture_result.previous_screenshot_path,
+            diff_path=capture_result.diff_path,
+            source_path=capture_result.source_path,
             duration_ms=int((time.perf_counter() - started_at) * 1000),
         )
 

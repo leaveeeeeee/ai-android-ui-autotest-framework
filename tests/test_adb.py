@@ -89,3 +89,19 @@ def test_parse_keyboard_visible_ignores_hidden_ime_with_stale_visible_flag() -> 
         )
         is False
     )
+
+
+def test_parse_focus_state_prefers_resumed_app_when_system_overlay_is_foreground() -> None:
+    snapshot = parse_focus_state(
+        window_output=(
+            "mCurrentFocus=Window{42 u0 com.android.systemui/.shade.NotificationPanelView}\n"
+            "mFocusedApp=AppWindowToken{ mark.via/.Shell }\n"
+            "mResumeActivity: ActivityRecord{5d2 mark.via/.Shell t12}\n"
+            "imeInputTarget=Window{15 u0 mark.via/.Shell}\n"
+        ),
+        power_output="Display Power: state=ON\nmWakefulness=Awake\n",
+    )
+
+    assert snapshot.package == "mark.via"
+    assert snapshot.activity == ".Shell"
+    assert snapshot.screen_on is True

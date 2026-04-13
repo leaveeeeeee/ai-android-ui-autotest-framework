@@ -5,6 +5,8 @@ import subprocess
 from dataclasses import dataclass
 from typing import Sequence
 
+from framework.core.defaults import default_value
+
 WINDOW_FOCUS_KEYWORDS = (
     "mCurrentFocus",
     "mFocusedApp",
@@ -57,11 +59,7 @@ def parse_focus_state(window_output: str, power_output: str) -> "DeviceSnapshot"
 
     focus_lines = extract_focus_lines(window_output)
     focus = " | ".join(focus_lines) if focus_lines else "unknown"
-    package = ""
-    activity = ""
-    match = re.search(r"([A-Za-z0-9._]+)/([A-Za-z0-9.$_/-]+)", focus)
-    if match:
-        package, activity = match.groups()
+    package, activity = _pick_primary_focus_target(focus_lines)
     return DeviceSnapshot(
         focus=focus,
         package=package,
@@ -80,6 +78,30 @@ class DeviceSnapshot:
     activity: str = ""
     keyboard_visible: bool = False
     screen_on: bool = True
+
+
+def _pick_primary_focus_target(focus_lines: list[str]) -> tuple[str, str]:
+    """在多条焦点候选中挑选最能代表业务前台的目标。"""
+
+    transient_packages = set(default_value("device.transient_packages"))
+    candidates: list[tuple[str, str]] = []
+    for line in focus_lines:
+        match = re.search(r"([A-Za-z0-9._]+)/([A-Za-z0-9.$_/-]+)", line)
+        if match:
+            candidates.append(match.groups())
+
+    if not candidates:
+        return "", ""
+
+    first_package, first_activity = candidates[0]
+    if first_package not in transient_packages:
+        return first_package, first_activity
+
+    for package, activity in candidates[1:]:
+        if package not in transient_packages:
+            return package, activity
+
+    return first_package, first_activity
 
 
 class AdbClient:

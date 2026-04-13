@@ -49,13 +49,15 @@ flowchart TD
     B --> C[tests/conftest.py 注册 framework.pytest_plugin]
     C --> D[pytest_plugin 加载 fixtures 和 reporting hooks]
     D --> E[DeviceManager 做前置检查]
-    E --> F[Page Object 调用 DriverAdapter]
-    F --> G[uiautomator2 操作设备]
-    F --> H[ImageEngine 多尺度图像兜底]
-    G --> I[record_step 记录步骤和耗时]
-    H --> I
-    I --> J[runtime_store + pytest-html/Allure 附件]
-    J --> K[生成 reports 和 report_data]
+    E --> F[fixture 装配 Page Object 和 ImageEngine]
+    F --> G[Page Object 调用 DriverAdapter]
+    G --> H[uiautomator2 操作设备]
+    G --> I[ImageEngine 多尺度图像兜底]
+    G --> J[ArtifactManager + StepCaptureService 采集状态]
+    H --> J
+    I --> J
+    J --> K[runtime_store + pytest-html/Allure 附件]
+    K --> L[生成 reports 和 report_data]
 ```
 
 详细流程图见：
@@ -87,10 +89,12 @@ flowchart TD
 - 公共前置：执行前检查 ADB、设备状态、焦点窗口、输入法、屏幕状态，并按状态驱动恢复基线页
 - 公共后置：执行后按状态收敛到统一初始状态，不再依赖固定 `sleep + back/home/back`
 - 页面对象：业务语义方法集中在 `framework/pages/`
+- 页面对象装配：fixture 优先显式注入 `ImageEngine`；`BasePage` 只保留兼容性回退
 - 图像兜底：`Locator` 支持显式声明 `image_template / image_region / image_threshold`
 - 图像兜底：`ImageEngine` 支持多尺度模板匹配，适配常见分辨率缩放
 - 文本生成用例：支持 `csv/xlsx` 转 pytest；信息不完整时可同时产出 AI prompt，并自动清理当前输入源的过期生成文件
 - 报告链路：结构化 HTML + `pytest-html` + Allure results；其中 `runtime_store` 主要服务结构化 HTML，另外两条链路通过 pytest hook 附件补充现场信息
+- 内部拆分：`DriverAdapter` 仍是稳定 facade，采集逻辑已拆到 `ArtifactManager` 和 `StepCaptureService`
 - 执行边界：单 `serial` 真机语义，`device` 用例不支持 `pytest-xdist` 并行执行
 
 ## 快速开始
@@ -184,6 +188,9 @@ artifacts/report_data/ai-prompts/
 - [docs/framework_flow.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/framework_flow.md)
 - [docs/test_case_entry_standard.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/test_case_entry_standard.md)
 - [docs/case_generation_workflow.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/case_generation_workflow.md)
+- [docs/adr/0001-driver-facade-and-step-capture.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/adr/0001-driver-facade-and-step-capture.md)
+- [docs/upgrade_guide.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/upgrade_guide.md)
+- [docs/performance_baseline.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/performance_baseline.md)
 
 ## Docker
 

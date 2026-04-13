@@ -54,6 +54,11 @@
 - `fixture=via_baidu_page`
 - `page_object=ViaBaiduPage`
 
+补充约束：
+
+- 测试代码应通过页面对象和 fixture 间接使用 `ImageEngine`
+- 不要在 `python_calls` 里自行构造图像引擎或直接拼装模板目录
+
 ### 4. 尽量提供稳定锚点
 
 如果你知道页面上稳定的元素文本、resource-id、按钮名称，建议写进 `ai_notes`：

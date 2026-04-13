@@ -13,6 +13,7 @@ from framework.device.manager import DeviceManager
 from framework.pages.demo_page import DemoPage
 from framework.pages.via_baidu_page import ViaBaiduPage
 from framework.testing.page_registry import register_page_object
+from framework.vision.factory import build_image_engine
 
 
 @pytest.fixture(scope="session")
@@ -52,7 +53,7 @@ def adb(device_manager: DeviceManager) -> AdbClient:
 def demo_page(request: pytest.FixtureRequest, driver: DriverAdapter) -> DemoPage:
     """示例页面对象 fixture。"""
 
-    return register_page_object(request, DemoPage(driver))
+    return register_page_object(request, DemoPage(driver, image_engine=build_image_engine(driver)))
 
 
 @pytest.fixture()
@@ -76,7 +77,10 @@ def via_baidu_page(
         comparison="PASS",
         logs=f"adb am start -n {package}/{activity} -d {start_url}",
     )
-    return register_page_object(request, ViaBaiduPage(driver))
+    return register_page_object(
+        request,
+        ViaBaiduPage(driver, image_engine=build_image_engine(driver)),
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)
