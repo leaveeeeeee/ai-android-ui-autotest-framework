@@ -95,6 +95,7 @@ flowchart TD
 - 文本生成用例：支持 `csv/xlsx` 转 pytest；信息不完整时可同时产出 AI prompt，并自动清理当前输入源的过期生成文件
 - 报告链路：结构化 HTML + `pytest-html` + Allure results；其中 `runtime_store` 主要服务结构化 HTML，另外两条链路通过 pytest hook 附件补充现场信息
 - 内部拆分：`DriverAdapter` 仍是稳定 facade，采集逻辑已拆到 `ArtifactManager` 和 `StepCaptureService`
+- 步骤 API：页面对象统一使用 `StepSpec + BasePage.step()`，避免业务方法里散落大量 `record_step(**kwargs)` 样板代码
 - 执行边界：单 `serial` 真机语义，`device` 用例不支持 `pytest-xdist` 并行执行
 
 ## 快速开始
@@ -217,7 +218,7 @@ ghcr.io/leaveeeeeee/ai-android-ui-autotest-framework
 - `PR Check`
   - 编译检查
   - 基础单测
-  - 上传 HTML/JUnit 工件
+  - 输出 coverage 摘要并上传 HTML/JUnit/Coverage 工件
 - `Docker Publish`
   - `main` 分支通过后构建镜像
   - 发布到 GitHub Container Registry
@@ -234,6 +235,7 @@ ghcr.io/leaveeeeeee/ai-android-ui-autotest-framework
 - fixture 定义：[framework/pytest_fixtures.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_fixtures.py)
 - 生命周期与失败采集：[framework/reporting/hooks.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/reporting/hooks.py)
 - Driver：[framework/core/driver.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/driver.py)
+- 步骤模型：[framework/core/steps.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/steps.py)
 - 设备管理：[framework/device/manager.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/device/manager.py)
 - 报告生成：[framework/reporting/simple_html.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/reporting/simple_html.py)
 - 图像匹配：[framework/vision/image_engine.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/vision/image_engine.py)

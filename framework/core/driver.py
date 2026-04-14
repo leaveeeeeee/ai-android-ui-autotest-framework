@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-import re
 import time
 from pathlib import Path
 from typing import Any
 
 from framework.core.artifact_manager import ArtifactManager
+from framework.core.bounds import Bounds, extract_bounds
 from framework.core.defaults import setting_from_mapping
 from framework.core.exceptions import DeviceConnectionError, ElementNotFoundError
 from framework.core.locator import Locator
-from framework.core.logger import init_logging, setup_logger
+from framework.core.logger import setup_logger
 from framework.core.protocols import StepContextProvider, StepRecorder
 from framework.core.step_capture import StepCaptureService
+from framework.core.steps import StepSpec
 from framework.core.waiter import Waiter
 
 
@@ -32,7 +33,6 @@ class DriverAdapter:
         framework_config: dict[str, Any] | None = None,
     ) -> None:
         self.serial = serial
-        init_logging(framework_config)
         self.logger = setup_logger()
         self.waiter = Waiter(timeout=default_timeout, interval=retry_interval)
         self.framework_config = framework_config or {}
@@ -110,7 +110,7 @@ class DriverAdapter:
             try:
                 element = self.find(locator)
                 if locator.strategy == "xpath":
-                    bounds = self._extract_bounds(element)
+                    bounds = extract_bounds(element)
                     if bounds is not None:
                         self._click_bounds_center(bounds)
                         return
@@ -143,7 +143,7 @@ class DriverAdapter:
         """
         element = self.find(locator)
         if locator.strategy == "xpath":
-            bounds = self._extract_bounds(element)
+            bounds = extract_bounds(element)
             if bounds is not None:
                 self._click_bounds_center(bounds)
             else:
@@ -253,10 +253,10 @@ class DriverAdapter:
         """
         return self.artifact_manager.build_artifact_name(base_name, category=category)
 
-    def get_bounds(self, locator: Locator) -> tuple[int, int, int, int] | None:
+    def get_bounds(self, locator: Locator) -> Bounds | None:
         """获取元素边界框，常用于高亮截图中的操作区域。"""
         element = self.find(locator)
-        return self._extract_bounds(element)
+        return extract_bounds(element)
 
     def capture_state(self, name: str) -> tuple[str, str]:
         """采集当前状态。
@@ -271,19 +271,7 @@ class DriverAdapter:
             page_source_provider=self.page_source,
         )
 
-    def record_step(
-        self,
-        *,
-        name: str,
-        detail: str = "",
-        expected: str = "",
-        actual: str = "",
-        comparison: str = "",
-        status: str = "PASSED",
-        logs: str = "",
-        highlight_rect: tuple[int, int, int, int] | None = None,
-        capture: bool = True,
-    ) -> None:
+    def record_step(self, spec: StepSpec) -> None:
         """记录一步执行过程。
 
         这一层会负责：
@@ -299,21 +287,19 @@ class DriverAdapter:
         started_at = time.perf_counter()
         capture_result = self.step_capture.collect(
             recorder=self.step_recorder,
-            name=name,
-            highlight_rect=highlight_rect,
-            capture=capture,
+            spec=spec,
             screenshotter=self.screenshot,
             page_source_provider=self.page_source,
         )
 
         self.step_recorder.add_step(
-            name=name,
-            status=status,
-            detail=detail,
-            expected=expected,
-            actual=actual,
-            comparison=comparison,
-            logs=logs,
+            name=spec.name,
+            status=spec.status,
+            detail=spec.detail,
+            expected=spec.expected,
+            actual=spec.actual,
+            comparison=spec.comparison,
+            logs=spec.logs,
             focus_window=capture_result.focus_window,
             screenshot_path=capture_result.screenshot_path,
             previous_screenshot_path=capture_result.previous_screenshot_path,
@@ -365,80 +351,7 @@ class DriverAdapter:
             return bool(wait_method(timeout=0))
         return False
 
-    def _extract_bounds(self, element: Any) -> tuple[int, int, int, int] | None:
-        """尽量从不同元素对象结构中解析边界框。"""
-        if element is None:
-            return None
-
-        info = getattr(element, "info", None)
-        if isinstance(info, dict):
-            bounds = info.get("bounds")
-            normalized = self._normalize_bounds(bounds)
-            if normalized is not None:
-                return normalized
-
-        bounds_attr = getattr(element, "bounds", None)
-        if callable(bounds_attr):
-            try:
-                normalized = self._normalize_bounds(bounds_attr())
-                if normalized is not None:
-                    return normalized
-            except Exception:
-                pass
-        elif bounds_attr is not None:
-            normalized = self._normalize_bounds(bounds_attr)
-            if normalized is not None:
-                return normalized
-
-        rect_attr = getattr(element, "rect", None)
-        if rect_attr is not None:
-            normalized = self._normalize_bounds(rect_attr)
-            if normalized is not None:
-                return normalized
-
-        getter = getattr(element, "get", None)
-        if callable(getter):
-            try:
-                nested = getter(timeout=0)
-            except TypeError:
-                try:
-                    nested = getter()
-                except Exception:
-                    nested = None
-            except Exception:
-                nested = None
-            if nested is not None and nested is not element:
-                return self._extract_bounds(nested)
-
-        return None
-
-    def _normalize_bounds(self, bounds: Any) -> tuple[int, int, int, int] | None:
-        """把不同格式的 bounds 统一转换成 `(left, top, right, bottom)`。"""
-        if bounds is None:
-            return None
-
-        if isinstance(bounds, dict):
-            keys = ("left", "top", "right", "bottom")
-            if all(key in bounds for key in keys):
-                return (
-                    int(bounds["left"]),
-                    int(bounds["top"]),
-                    int(bounds["right"]),
-                    int(bounds["bottom"]),
-                )
-
-        if isinstance(bounds, (list, tuple)) and len(bounds) == 4:
-            return tuple(int(value) for value in bounds)  # type: ignore[return-value]
-
-        if isinstance(bounds, str):
-            match = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", bounds)
-            if match:
-                left, top, right, bottom = match.groups()
-                return int(left), int(top), int(right), int(bottom)
-
-        return None
-
-    def _click_bounds_center(self, bounds: tuple[int, int, int, int]) -> None:
+    def _click_bounds_center(self, bounds: Bounds) -> None:
         """点击边界框中心点。"""
         left, top, right, bottom = bounds
         self.click_point((left + right) // 2, (top + bottom) // 2)

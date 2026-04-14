@@ -75,3 +75,37 @@ def test_base_page_builds_image_engine_via_factory(monkeypatch: pytest.MonkeyPat
     page = BasePage(driver=driver)
 
     assert page.image_engine is built_engine
+
+
+def test_base_page_step_records_success_after_context_exit() -> None:
+    driver = FakePageDriver()
+    page = BasePage(driver=driver, image_engine=FakeImageEngine())
+
+    with page.step("点击搜索框", expected="输入框可编辑", detail="聚焦搜索输入框") as step:
+        step.update(actual="已点击搜索框", logs="action=click locator=search_input")
+
+    assert len(driver.recorded_steps) == 1
+    recorded = driver.recorded_steps[0]
+    assert recorded.name == "点击搜索框"
+    assert recorded.status == "PASSED"
+    assert recorded.comparison == "PASS"
+    assert recorded.actual == "已点击搜索框"
+    assert recorded.logs == "action=click locator=search_input"
+
+
+def test_base_page_step_records_failure_and_reraises() -> None:
+    driver = FakePageDriver()
+    page = BasePage(driver=driver, image_engine=FakeImageEngine())
+
+    with pytest.raises(RuntimeError, match="tap failed"):
+        with page.step("点击搜索按钮", expected="进入结果页") as step:
+            step.update(detail="点击百度搜索按钮")
+            raise RuntimeError("tap failed")
+
+    assert len(driver.recorded_steps) == 1
+    recorded = driver.recorded_steps[0]
+    assert recorded.name == "点击搜索按钮"
+    assert recorded.status == "FAILED"
+    assert recorded.comparison == "FAIL"
+    assert recorded.actual == "tap failed"
+    assert recorded.logs == "tap failed"

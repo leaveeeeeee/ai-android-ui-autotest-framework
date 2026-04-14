@@ -85,7 +85,7 @@ pytest 的注册入口仍然是 [tests/conftest.py](/Volumes/SD%20Card/从入门
 - `press(key)`: 发送按键
 - `set_runtime_context(run_id=..., case_name=...)`: 设置运行时上下文，用于生成唯一产物名
 - `build_artifact_name(base_name, category="artifact")`: 统一生成截图、XML、调试图命名
-- `record_step(...)`: 写入结构化步骤、前后截图、差异图和 `duration_ms`
+- `record_step(spec: StepSpec)`: 写入结构化步骤、前后截图、差异图和 `duration_ms`
 
 当前行为约束：
 
@@ -98,6 +98,7 @@ pytest 的注册入口仍然是 [tests/conftest.py](/Volumes/SD%20Card/从入门
 
 - [framework/core/artifact_manager.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/artifact_manager.py)：负责运行时命名和状态采集
 - [framework/core/step_capture.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/step_capture.py)：负责焦点上下文、截图高亮、diff 图和页面层级采集
+- [framework/core/steps.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/steps.py)：定义 `StepSpec` 和 `StepContext`
 
 ## `BasePage`
 
@@ -111,6 +112,8 @@ pytest 的注册入口仍然是 [tests/conftest.py](/Volumes/SD%20Card/从入门
 - `input_text(locator, value)`
 - `clear_text(locator)`
 - `is_visible(locator)`
+- `record_step(spec: StepSpec)`
+- `step(name, *, expected="", detail="", capture=True, comparison="PASS")`
 - `save_failure_artifacts(case_name)`
 
 当前设计重点：
@@ -119,6 +122,23 @@ pytest 的注册入口仍然是 [tests/conftest.py](/Volumes/SD%20Card/从入门
 - 页面对象里的图片兜底走 `ImageEngine` 多尺度模板匹配
 - 推荐在 fixture 或 page factory 中显式注入 `ImageEngine`
 - `BasePage(driver)` 仍保留默认构造能力，仅作为兼容性回退
+- 页面对象推荐使用 `with self.step(...):` 记录业务步骤；失败时会自动落 `FAILED/FAIL` 并继续抛出原异常
+
+### `StepSpec`
+
+文件：[framework/core/steps.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/steps.py)
+
+核心字段：
+
+- `name`: 步骤名
+- `detail`: 说明
+- `expected`: 预期
+- `actual`: 实际
+- `comparison`: 对比结论，如 `PASS / FAIL / FALLBACK`
+- `status`: 执行状态，如 `PASSED / FAILED`
+- `logs`: 结构化或文本日志
+- `highlight_rect`: 高亮区域
+- `capture`: 是否采集截图/XML/diff
 
 ### `Locator`
 
@@ -194,6 +214,7 @@ Locator(
 
 - `dumpsys` 解析逻辑已抽成纯函数，便于单测覆盖和后续扩展
 - `DeviceSnapshot` 仍是设备状态快照的统一数据结构
+- `runner` 可注入，便于测试 `shell()/wait_for_device()/start_activity()` 的命令组装
 
 ## 页面对象约束
 
@@ -211,6 +232,17 @@ assert via_baidu_page.is_result_loaded("chatgpt")
 ```python
 driver.click(locator)
 driver.set_text(locator, "chatgpt")
+```
+
+推荐页面层步骤写法：
+
+```python
+with via_baidu_page.step(
+    "输入搜索词",
+    expected="输入框内容更新为 chatgpt",
+) as step:
+    step.update(actual="已执行输入：chatgpt", logs='action=set_text value="chatgpt"')
+    via_baidu_page.input_text(via_baidu_page.search_input, "chatgpt")
 ```
 
 ## 用例生成接口约束

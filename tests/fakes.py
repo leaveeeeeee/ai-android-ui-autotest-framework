@@ -6,6 +6,7 @@ import cv2
 
 from framework.core.exceptions import ElementNotFoundError
 from framework.core.locator import Locator
+from framework.core.steps import StepSpec
 from framework.device.adb import DeviceSnapshot
 
 
@@ -23,6 +24,7 @@ class FakePageDriver:
         self.set_text_error = set_text_error
         self.visible = visible
         self.sent_keys: list[tuple[str, bool]] = []
+        self.recorded_steps: list[StepSpec] = []
 
     def click(self, locator: Locator) -> None:
         if self.click_error is not None:
@@ -49,6 +51,9 @@ class FakePageDriver:
 
     def page_source(self) -> str:
         return "<hierarchy />"
+
+    def record_step(self, spec: StepSpec) -> None:
+        self.recorded_steps.append(spec)
 
 
 class FakeImageEngine:

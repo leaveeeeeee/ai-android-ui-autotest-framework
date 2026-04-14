@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from framework.core.steps import StepSpec
 from framework.device.manager import DeviceManager
 from framework.reporting.allure_helper import attach_png as allure_attach_png
 from framework.reporting.allure_helper import attach_text as allure_attach_text
@@ -54,24 +55,30 @@ def manage_device_case_lifecycle(
         allure_attach_text("Environment Precheck", request.node._framework_precheck)
         allure_attach_text("Baseline", request.node._framework_baseline)
         driver.record_step(
-            name="环境前置检查",
-            detail=request.node._framework_precheck,
-            expected="设备可用，并恢复到统一初始页。",
-            actual="环境检查通过，设备已恢复到基线页。",
-            comparison="PASS",
-            logs=request.node._framework_precheck,
+            StepSpec(
+                name="环境前置检查",
+                detail=request.node._framework_precheck,
+                expected="设备可用，并恢复到统一初始页。",
+                actual="环境检查通过，设备已恢复到基线页。",
+                comparison="PASS",
+                logs=request.node._framework_precheck,
+                capture=False,
+            )
         )
     except Exception as exc:
         request.node._framework_precheck = str(exc)
         store["environment"]["precheck"] = request.node._framework_precheck
         driver.record_step(
-            name="环境前置检查",
-            detail=str(exc),
-            expected="设备可用，并恢复到统一初始页。",
-            actual="环境检查失败。",
-            comparison="FAIL",
-            status="FAILED",
-            logs=str(exc),
+            StepSpec(
+                name="环境前置检查",
+                detail=str(exc),
+                expected="设备可用，并恢复到统一初始页。",
+                actual="环境检查失败。",
+                comparison="FAIL",
+                status="FAILED",
+                logs=str(exc),
+                capture=False,
+            )
         )
         driver.set_step_recorder(None)
         driver.set_step_context_provider(None)
@@ -87,25 +94,31 @@ def manage_device_case_lifecycle(
             store["environment"]["postcheck"] = request.node._framework_postcheck
             allure_attach_text("Environment Reset", request.node._framework_postcheck)
             driver.record_step(
-                name="环境后置恢复",
-                detail=request.node._framework_postcheck,
-                expected="设备返回桌面或统一基线页。",
-                actual="后置恢复完成。",
-                comparison="PASS",
-                logs=request.node._framework_postcheck,
+                StepSpec(
+                    name="环境后置恢复",
+                    detail=request.node._framework_postcheck,
+                    expected="设备返回桌面或统一基线页。",
+                    actual="后置恢复完成。",
+                    comparison="PASS",
+                    logs=request.node._framework_postcheck,
+                    capture=False,
+                )
             )
         except Exception as exc:
             request.node._framework_postcheck = str(exc)
             store["environment"]["postcheck"] = request.node._framework_postcheck
             allure_attach_text("Environment Reset", request.node._framework_postcheck)
             driver.record_step(
-                name="环境后置恢复",
-                detail=str(exc),
-                expected="设备返回桌面或统一基线页。",
-                actual="后置恢复失败。",
-                comparison="FAIL",
-                status="FAILED",
-                logs=str(exc),
+                StepSpec(
+                    name="环境后置恢复",
+                    detail=str(exc),
+                    expected="设备返回桌面或统一基线页。",
+                    actual="后置恢复失败。",
+                    comparison="FAIL",
+                    status="FAILED",
+                    logs=str(exc),
+                    capture=False,
+                )
             )
             raise
         finally:

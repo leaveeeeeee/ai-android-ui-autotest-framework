@@ -7,6 +7,7 @@ import pytest
 from framework.core.driver import DriverAdapter
 from framework.core.exceptions import ElementNotFoundError
 from framework.core.locator import Locator
+from framework.core.steps import StepSpec
 from tests.fakes import FakeCaptureDevice, FakeSelector, FakeStepRecorder
 
 
@@ -97,7 +98,7 @@ def test_driver_record_step_includes_duration() -> None:
     recorder = FakeStepRecorder()
     driver.set_step_recorder(recorder)
 
-    driver.record_step(name="打开搜索框", detail="detail", capture=False)
+    driver.record_step(StepSpec(name="打开搜索框", detail="detail", capture=False))
 
     assert recorder.records
     assert isinstance(recorder.records[0]["duration_ms"], int)
@@ -115,7 +116,7 @@ def test_driver_record_step_skips_capture_when_disabled(tmp_path: Path) -> None:
     recorder = FakeStepRecorder()
     driver.set_step_recorder(recorder)
 
-    driver.record_step(name="不截图步骤", capture=False)
+    driver.record_step(StepSpec(name="不截图步骤", capture=False))
 
     assert recorder.records[0]["screenshot_path"] == ""
     assert recorder.records[0]["source_path"] == ""
@@ -149,7 +150,7 @@ def test_driver_record_step_creates_diff_from_previous_screenshot(
     driver.set_step_recorder(recorder)
     driver.set_runtime_context(run_id="run_001", case_name="tests_case")
 
-    driver.record_step(name="截图步骤", capture=True)
+    driver.record_step(StepSpec(name="截图步骤", capture=True))
 
     assert diff_calls
     assert diff_calls[0][0] == str(previous)
@@ -174,6 +175,6 @@ def test_driver_record_step_ignores_context_provider_errors(tmp_path: Path) -> N
         raise RuntimeError("provider failed")
 
     driver.set_step_context_provider(broken_context)
-    driver.record_step(name="上下文异常步骤", capture=False)
+    driver.record_step(StepSpec(name="上下文异常步骤", capture=False))
 
     assert recorder.records[0]["focus_window"] == ""

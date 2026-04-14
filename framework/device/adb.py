@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 import subprocess
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Callable, Sequence
 
 from framework.core.defaults import default_value
 
@@ -80,6 +80,9 @@ class DeviceSnapshot:
     screen_on: bool = True
 
 
+AdbRunner = Callable[..., subprocess.CompletedProcess[str]]
+
+
 def _pick_primary_focus_target(focus_lines: list[str]) -> tuple[str, str]:
     """在多条焦点候选中挑选最能代表业务前台的目标。"""
 
@@ -115,8 +118,9 @@ class AdbClient:
     - 检查应用是否安装
     """
 
-    def __init__(self, serial: str = "") -> None:
+    def __init__(self, serial: str = "", runner: AdbRunner = subprocess.run) -> None:
         self.serial = serial
+        self._runner = runner
 
     def _base_cmd(self) -> list[str]:
         """拼接基础 adb 命令。"""
@@ -127,40 +131,32 @@ class AdbClient:
 
     def shell(self, command: str, check: bool = True) -> str:
         """执行 `adb shell` 命令并返回标准输出。"""
-        result = subprocess.run(
+        result = self._run(
             [*self._base_cmd(), "shell", command],
-            capture_output=True,
-            text=True,
             check=check,
         )
         return result.stdout.strip()
 
     def devices(self) -> str:
         """查看当前 adb 识别到的设备列表。"""
-        result = subprocess.run(
+        result = self._run(
             ["adb", "devices"],
-            capture_output=True,
-            text=True,
             check=True,
         )
         return result.stdout.strip()
 
     def wait_for_device(self) -> str:
         """阻塞等待设备上线。"""
-        result = subprocess.run(
+        result = self._run(
             [*self._base_cmd(), "wait-for-device"],
-            capture_output=True,
-            text=True,
             check=True,
         )
         return result.stdout.strip()
 
     def get_state(self) -> str:
         """获取设备状态，常见返回值为 `device`。"""
-        result = subprocess.run(
+        result = self._run(
             [*self._base_cmd(), "get-state"],
-            capture_output=True,
-            text=True,
             check=True,
         )
         return result.stdout.strip()
@@ -179,12 +175,7 @@ class AdbClient:
         if extra_args:
             cmd.extend(extra_args)
 
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
+        result = self._run(cmd, check=True)
         return result.stdout.strip()
 
     def force_stop(self, package: str) -> str:
@@ -252,3 +243,11 @@ class AdbClient:
     def is_package_installed(self, package: str) -> bool:
         """判断指定应用是否已安装。"""
         return bool(self.shell(f"pm path {package}"))
+
+    def _run(self, cmd: Sequence[str], *, check: bool) -> subprocess.CompletedProcess[str]:
+        return self._runner(
+            list(cmd),
+            capture_output=True,
+            text=True,
+            check=check,
+        )

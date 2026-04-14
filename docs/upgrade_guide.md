@@ -10,6 +10,24 @@
 
 ## 主要变化
 
+### 0. 步骤 API 现在统一切到 `StepSpec + BasePage.step()`
+
+旧版本里，页面对象和测试辅助代码可以直接写：
+
+- `driver.record_step(name="...", detail="...", capture=False)`
+- `page.record_step(name="...", expected="...", actual="...")`
+
+当前版本已经改成显式步骤模型：
+
+- `driver.record_step(StepSpec(...))`
+- `page.record_step(StepSpec(...))`
+- 页面对象主推荐入口：`with page.step("步骤名", expected="...") as step: ...`
+
+影响：
+
+- 旧的 `record_step(**kwargs)` 调用方式不再兼容
+- 页面对象里推荐把动态字段通过 `step.update(...)` 补进去，而不是把一长串关键字参数塞给 `record_step()`
+
 ### 1. pytest 入口变薄了
 
 旧版本里，大部分逻辑都在 `tests/conftest.py`。
@@ -34,6 +52,7 @@
 影响：
 
 - 如果你在测试里直接 monkeypatch `DriverAdapter.record_step()` 内部的截图逻辑，需要改成 patch `StepCaptureService` 或 `ArtifactManager`
+- 如果你直接断言 `record_step()` 的入参字典，需要改成断言 `StepSpec`
 
 ### 3. 页面对象优先由 fixture 注入 `ImageEngine`
 
@@ -67,6 +86,19 @@
 - CI 中需要把纯单测和真机用例分开跑
 - `device` 用例继续保持单 worker
 
+### 6. CI 现在输出 coverage 可见性
+
+`PR Check` 中的 `unit-tests` job 现在会输出：
+
+- 终端 coverage 摘要
+- `coverage.xml`
+- HTML/JUnit/Coverage 工件
+
+影响：
+
+- 这轮还没有 coverage 阈值，不会因为覆盖率低直接拦 PR
+- 但后续如果要加阈值，可以直接基于现有 artifact 和基线推进
+
 ## 推荐升级步骤
 
 1. 先同步配置文件和依赖。
@@ -80,4 +112,5 @@
 
 - 旧测试如果直接依赖 `tests/conftest.py` 里的私有函数，需要改成依赖公开 fixture 或插件 hook
 - 旧 monkeypatch 如果打在 `DriverAdapter.record_step()` 的内部实现上，升级后需要改 patch 点
+- 旧页面对象里如果还在手写 `record_step(name=..., ...)`，需要统一迁移到 `StepSpec` 或 `BasePage.step()`
 - 如果历史文档还写着“全部逻辑都在 `conftest.py`”，需要一起更新，避免新同事走错入口

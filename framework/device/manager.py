@@ -7,6 +7,7 @@ from framework.core.config import ConfigManager
 from framework.core.defaults import default_value
 from framework.core.driver import DriverAdapter
 from framework.core.exceptions import DeviceConnectionError
+from framework.core.logger import init_logging
 from framework.core.waiter import Waiter
 from framework.device.adb import AdbClient, DeviceSnapshot
 
@@ -20,6 +21,7 @@ class DeviceManager:
     _adb_client: AdbClient | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
+        init_logging(self.config.get("framework", {}) or {})
         timeout = float(
             self.config.get("framework.default_timeout", default_value("framework.default_timeout"))
         )
