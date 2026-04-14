@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from framework.core.protocols import StepContextProvider, StepRecorder
+from framework.core.steps import StepSpec
 from framework.reporting.image_tools import annotate_click_region, create_diff_image
 
 if TYPE_CHECKING:
@@ -38,9 +39,7 @@ class StepCaptureService:
         self,
         *,
         recorder: StepRecorder,
-        name: str,
-        highlight_rect: tuple[int, int, int, int] | None,
-        capture: bool,
+        spec: StepSpec,
         screenshotter,
         page_source_provider,
     ) -> StepCaptureResult:
@@ -54,10 +53,10 @@ class StepCaptureService:
             except Exception:
                 result.focus_window = ""
 
-        if not capture:
+        if not spec.capture:
             return result
 
-        step_file_name = recorder.next_step_name(name)
+        step_file_name = recorder.next_step_name(spec.name)
         screenshot_path, source_path = self.artifact_manager.capture_state(
             name=step_file_name,
             screenshotter=screenshotter,
@@ -66,8 +65,8 @@ class StepCaptureService:
         result.screenshot_path = screenshot_path
         result.source_path = source_path
 
-        if highlight_rect is not None:
-            annotate_click_region(screenshot_path, highlight_rect)
+        if spec.highlight_rect is not None:
+            annotate_click_region(screenshot_path, spec.highlight_rect)
         if result.previous_screenshot_path:
             diff_path = Path(screenshot_path).with_name(f"{Path(screenshot_path).stem}_diff.png")
             create_diff_image(result.previous_screenshot_path, screenshot_path, str(diff_path))

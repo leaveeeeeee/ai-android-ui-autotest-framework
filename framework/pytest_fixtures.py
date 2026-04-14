@@ -8,6 +8,8 @@ import pytest
 from framework.core.config import ConfigManager
 from framework.core.defaults import default_value
 from framework.core.driver import DriverAdapter
+from framework.core.logger import init_logging
+from framework.core.steps import StepSpec
 from framework.device.adb import AdbClient
 from framework.device.manager import DeviceManager
 from framework.pages.demo_page import DemoPage
@@ -21,7 +23,9 @@ def config(request: pytest.FixtureRequest) -> ConfigManager:
     """加载项目配置。"""
 
     config_path = request.config.getoption("--config")
-    return ConfigManager.load(config_path)
+    manager = ConfigManager.load(config_path)
+    init_logging(manager.get("framework", {}) or {})
+    return manager
 
 
 @pytest.fixture(scope="session")
@@ -70,12 +74,15 @@ def via_baidu_page(
     start_url = config.get("device.start_url", "https://www.baidu.com")
     adb.start_activity(package=package, activity=activity, data_uri=start_url)
     driver.record_step(
-        name="启动业务应用",
-        detail=f"启动应用 {package}/{activity} 并打开 {start_url}",
-        expected="Via 浏览器打开百度首页。",
-        actual=f"已发起启动：{package}/{activity}",
-        comparison="PASS",
-        logs=f"adb am start -n {package}/{activity} -d {start_url}",
+        StepSpec(
+            name="启动业务应用",
+            detail=f"启动应用 {package}/{activity} 并打开 {start_url}",
+            expected="Via 浏览器打开百度首页。",
+            actual=f"已发起启动：{package}/{activity}",
+            comparison="PASS",
+            logs=f"adb am start -n {package}/{activity} -d {start_url}",
+            capture=False,
+        )
     )
     return register_page_object(
         request,

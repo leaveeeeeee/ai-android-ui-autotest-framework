@@ -67,6 +67,4 @@ def setup_logger(
     - 日志配置统一由 `init_logging()` 初始化
     - 同名 logger 会复用 root handlers，避免重复打印
     """
-    if _CURRENT_SIGNATURE is None:
-        init_logging()
     return logging.getLogger(name)

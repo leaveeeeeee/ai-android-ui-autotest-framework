@@ -22,49 +22,51 @@
     <pre class="wrapped">{{ case.message or "-" }}</pre>
   </div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>步骤</th>
-        <th>状态</th>
-        <th>步骤耗时</th>
-        <th>预期</th>
-        <th>实际</th>
-        <th>对比</th>
-        <th>步骤日志</th>
-        <th>当前焦点窗口</th>
-        <th>前一步截图</th>
-        <th>当前截图</th>
-        <th>差异图</th>
-        <th>页面层级</th>
-        <th>说明</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% if case.steps %}
-        {% for step in case.steps %}
+  <div class="table-wrap">
+    <table>
+      <thead>
         <tr>
-          <td>{{ step.index }}</td>
-          <td>{{ step.name }}</td>
-          <td class="status {{ step.status|lower }}">{{ step.status }}</td>
-          <td>{{ step.duration_label }}</td>
-          <td>{{ step.expected }}</td>
-          <td>{{ step.actual }}</td>
-          <td>{{ step.comparison }}</td>
-          <td><pre class="wrapped">{{ step.logs }}</pre></td>
-          <td><pre class="wrapped">{{ step.focus_window }}</pre></td>
-          <td>{% if step.previous_screenshot_rel %}<a href="{{ step.previous_screenshot_rel }}"><img src="{{ step.previous_screenshot_rel }}" alt="前一步截图"></a>{% else %}-{% endif %}</td>
-          <td>{% if step.screenshot_rel %}<a href="{{ step.screenshot_rel }}"><img src="{{ step.screenshot_rel }}" alt="当前步骤截图"></a>{% else %}-{% endif %}</td>
-          <td>{% if step.diff_rel %}<a href="{{ step.diff_rel }}"><img src="{{ step.diff_rel }}" alt="差异对比图"></a>{% else %}-{% endif %}</td>
-          <td>{% if step.source_rel %}<a href="{{ step.source_rel }}">页面层级</a>{% else %}-{% endif %}</td>
-          <td><pre class="wrapped">{{ step.detail }}</pre></td>
+          <th>#</th>
+          <th>步骤</th>
+          <th>状态</th>
+          <th>步骤耗时</th>
+          <th>预期</th>
+          <th>实际</th>
+          <th>对比</th>
+          <th>步骤日志</th>
+          <th>当前焦点窗口</th>
+          <th>前一步截图</th>
+          <th>当前截图</th>
+          <th>差异图</th>
+          <th>页面层级</th>
+          <th>说明</th>
         </tr>
-        {% endfor %}
-      {% else %}
-        <tr><td colspan="14">No step rows recorded.</td></tr>
-      {% endif %}
-    </tbody>
-  </table>
+      </thead>
+      <tbody>
+        {% if case.steps %}
+          {% for step in case.steps %}
+          <tr>
+            <td>{{ step.index }}</td>
+            <td>{{ step.name }}</td>
+            <td class="status {{ step.status|lower }}">{{ step.status }}</td>
+            <td>{{ step.duration_label }}</td>
+            <td>{{ step.expected }}</td>
+            <td>{{ step.actual }}</td>
+            <td>{{ step.comparison }}</td>
+            <td><pre class="wrapped">{{ step.logs }}</pre></td>
+            <td><pre class="wrapped">{{ step.focus_window }}</pre></td>
+            <td>{% if step.previous_screenshot_rel %}<a href="{{ step.previous_screenshot_rel }}"><img src="{{ step.previous_screenshot_rel }}" alt="前一步截图"></a>{% else %}-{% endif %}</td>
+            <td>{% if step.screenshot_rel %}<a href="{{ step.screenshot_rel }}"><img src="{{ step.screenshot_rel }}" alt="当前步骤截图"></a>{% else %}-{% endif %}</td>
+            <td>{% if step.diff_rel %}<a href="{{ step.diff_rel }}"><img src="{{ step.diff_rel }}" alt="差异对比图"></a>{% else %}-{% endif %}</td>
+            <td>{% if step.source_rel %}<a href="{{ step.source_rel }}">页面层级</a>{% else %}-{% endif %}</td>
+            <td><pre class="wrapped">{{ step.detail }}</pre></td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="14">No step rows recorded.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
 </body>
 </html>

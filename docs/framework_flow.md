@@ -17,13 +17,14 @@ flowchart TD
     F --> G[真机前置检查]
     G --> H[fixture 装配 ImageEngine 并登记页面对象到 stash]
     H --> I[用例调用页面对象业务方法]
-    I --> J[DriverAdapter 统一等待/点击重试]
+    I --> I2[BasePage.step / StepSpec 编排步骤]
+    I2 --> J[DriverAdapter 统一等待/点击重试]
     J --> K{普通定位是否成功}
     K -- 是 --> L[uiautomator2 与设备交互]
     K -- 否且声明了图片兜底契约 --> M[ImageEngine 多尺度模板匹配]
     L --> N[ArtifactManager + StepCaptureService 采集状态]
     M --> N
-    N --> O[record_step 写入步骤与 duration_ms]
+    N --> O[record_step(spec) 写入步骤与 duration_ms]
     O --> P[hook 挂附件 + runtime_store 聚合]
     P --> Q[生成 HTML 报告和 Allure 结果]
 ```
@@ -55,7 +56,8 @@ sequenceDiagram
     Page->>G: 调用 click/input_text/is_visible
     G->>A: 通过 uiautomator2 或图像兜底操作设备
     G->>R: ArtifactManager / StepCaptureService 采集截图、XML、diff
-    G->>R: record_step() 保存步骤信息和耗时
+    Page->>R: StepContext 结束时提交 StepSpec
+    G->>R: record_step(spec) 保存步骤信息和耗时
     P->>Hooks: 失败时触发 makereport
     Hooks->>R: 结构化数据写入失败原因、截图、page source、前后置信息
     P->>R: sessionfinish 生成报告入口

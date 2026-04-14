@@ -14,7 +14,7 @@
 
 ### 1. 步骤采集
 
-通过 `DriverAdapter.record_step()` 走完整的：
+通过 `DriverAdapter.record_step(StepSpec(...))` 走完整的：
 
 - 运行时产物命名
 - 截图采集
@@ -64,7 +64,7 @@
 
 | 项目 | 结果 | 说明 |
 | --- | --- | --- |
-| `record_step()` 单次采集 | 平均 `0.21ms`，P95 `0.39ms` | 基于 fake device 的完整截图 + XML + recorder 落库，不含 diff 图 |
+| `record_step(StepSpec(...))` 单次采集 | 平均 `0.21ms`，P95 `0.39ms` | 基于 fake device 的完整截图 + XML + recorder 落库，不含 diff 图 |
 | `ImageEngine.match()` 单次匹配 | 平均 `7.12ms`，P95 `50.92ms` | 基于本地固定截图和 7 个尺度候选，包含截图文件写入和调试图输出 |
 
 ### 真机侧

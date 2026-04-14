@@ -31,17 +31,17 @@
 ### 1. 保留 `DriverAdapter` 作为对外 facade
 
 当前页面对象、fixture、测试生成器都已经围绕 `DriverAdapter` 建立了稳定调用面。
-本次不把它拆成多个公开组件，而是保持以下外部接口不变：
+本次不把它拆成多个公开组件，而是保持 facade 形态稳定，仅把步骤入参标准化为 `StepSpec`：
 
 - `find()`
 - `click()`
 - `set_text()`
 - `capture_state()`
-- `record_step()`
+- `record_step(spec: StepSpec)`
 - `set_runtime_context()`
 - `build_artifact_name()`
 
-这样可以避免页面对象和测试用例出现大规模破坏性改动。
+这样可以避免页面对象和测试用例同时面对“多公开对象 + 多套步骤参数”的双重改动。
 
 ### 2. 抽出 `ArtifactManager`
 
@@ -68,6 +68,8 @@
 - 计算 `duration_ms`
 - 调用 `step_recorder.add_step()`
 
+页面对象层则统一使用 `BasePage.step()` 上下文管理器来编排 `StepSpec`，减少业务方法里的样板步骤代码。
+
 ### 4. 页面层优先通过装配注入 `ImageEngine`
 
 页面对象 fixture 现在优先在 [framework/pytest_fixtures.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_fixtures.py) 里组装 `ImageEngine` 并传入页面对象。
@@ -78,6 +80,7 @@
 正面结果：
 
 - `record_step()` 的副作用链可以独立测试
+- 页面对象步骤现在可以用显式 `StepSpec + StepContext` 表达，不再散落长参数列表
 - `hooks.py` 可以直接断言结构化 store、附件和生命周期清理
 - 页面对象不再需要知道图像引擎的具体配置拼装方式
 - 外部 API 基本不变，升级成本低

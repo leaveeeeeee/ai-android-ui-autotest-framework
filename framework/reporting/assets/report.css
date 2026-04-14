@@ -45,10 +45,15 @@ h1 {
   margin-top: 24px;
 }
 
+.table-wrap {
+  overflow-x: auto;
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
   background: white;
+  min-width: 960px;
 }
 
 th,
@@ -88,4 +93,34 @@ img {
 pre.wrapped {
   white-space: pre-wrap;
   margin: 0;
+  word-break: break-word;
+}
+
+code {
+  word-break: break-word;
+}
+
+@media (max-width: 1080px) {
+  .metrics {
+    grid-template-columns: repeat(3, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  body {
+    margin: 16px;
+  }
+
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .summary {
+    display: grid;
+    gap: 8px;
+  }
+
+  img {
+    max-width: 180px;
+  }
 }

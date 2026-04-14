@@ -5,7 +5,7 @@ import subprocess
 from framework.device.adb import AdbClient, parse_focus_state, parse_keyboard_visible
 
 
-def test_adb_client_parses_focus_state_and_keyboard(monkeypatch):
+def test_adb_client_parses_focus_state_and_keyboard() -> None:
     recorded_commands: list[list[str]] = []
 
     def fake_run(cmd, capture_output, text, check):  # noqa: ANN001
@@ -33,8 +33,7 @@ def test_adb_client_parses_focus_state_and_keyboard(monkeypatch):
             )
         return subprocess.CompletedProcess(cmd, 0, stdout="Starting: Intent\n", stderr="")
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
-    adb = AdbClient(serial="SER123")
+    adb = AdbClient(serial="SER123", runner=fake_run)
 
     snapshot = adb.current_focus_state()
     result = adb.start_activity("mark.via", ".Shell", data_uri="https://www.baidu.com")
@@ -55,6 +54,26 @@ def test_adb_client_parses_focus_state_and_keyboard(monkeypatch):
         "mark.via/.Shell",
         "-d",
         "https://www.baidu.com",
+    ]
+
+
+def test_adb_client_runner_injection_covers_wait_and_shell_commands() -> None:
+    recorded_commands: list[tuple[list[str], bool]] = []
+
+    def fake_run(cmd, capture_output, text, check):  # noqa: ANN001
+        recorded_commands.append((cmd, check))
+        return subprocess.CompletedProcess(cmd, 0, stdout="device\n", stderr="")
+
+    adb = AdbClient(serial="SER456", runner=fake_run)
+
+    assert adb.wait_for_device() == "device"
+    assert adb.get_state() == "device"
+    assert adb.shell("input keyevent 3", check=False) == "device"
+
+    assert recorded_commands == [
+        (["adb", "-s", "SER456", "wait-for-device"], True),
+        (["adb", "-s", "SER456", "get-state"], True),
+        (["adb", "-s", "SER456", "shell", "input keyevent 3"], False),
     ]
 
 

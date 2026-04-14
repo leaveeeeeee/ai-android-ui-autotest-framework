@@ -140,6 +140,9 @@ jobs:
             -m "not device" \
             -q \
             -W error \
+            --cov=framework \
+            --cov-report=term-missing:skip-covered \
+            --cov-report=xml:artifacts/reports/coverage_${{ matrix.python-version }}.xml \
             --html=artifacts/reports/ci_pytest_report_${{ matrix.python-version }}.html \
             --self-contained-html \
             --junitxml=artifacts/reports/ci_junit_${{ matrix.python-version }}.xml

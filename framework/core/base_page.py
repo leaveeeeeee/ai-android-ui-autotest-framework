@@ -7,6 +7,7 @@ from framework.core.driver import DriverAdapter
 from framework.core.exceptions import ElementNotFoundError
 from framework.core.locator import Locator
 from framework.core.logger import setup_logger
+from framework.core.steps import StepContext, StepSpec
 from framework.vision.factory import build_image_engine
 from framework.vision.image_engine import ImageEngine
 
@@ -76,30 +77,30 @@ class BasePage:
             artifact_name=f"{locator.name}_visible",
         )
 
-    def record_step(
-        self,
-        *,
-        name: str,
-        detail: str = "",
-        expected: str = "",
-        actual: str = "",
-        comparison: str = "",
-        status: str = "PASSED",
-        logs: str = "",
-        highlight_rect: tuple[int, int, int, int] | None = None,
-        capture: bool = True,
-    ) -> None:
+    def record_step(self, spec: StepSpec) -> None:
         """记录一步执行步骤，并按需采集截图和页面层级。"""
-        self.driver.record_step(
-            name=name,
-            detail=detail,
-            expected=expected,
-            actual=actual,
-            comparison=comparison,
-            status=status,
-            logs=logs,
-            highlight_rect=highlight_rect,
-            capture=capture,
+        self.driver.record_step(spec)
+
+    def step(
+        self,
+        name: str,
+        *,
+        expected: str = "",
+        detail: str = "",
+        capture: bool = True,
+        comparison: str = "PASS",
+    ) -> StepContext:
+        """构建页面层步骤上下文。"""
+
+        return StepContext(
+            spec=StepSpec(
+                name=name,
+                expected=expected,
+                detail=detail,
+                capture=capture,
+                comparison=comparison,
+            ),
+            emitter=self.record_step,
         )
 
     def save_failure_artifacts(self, case_name: str) -> tuple[str, str]:

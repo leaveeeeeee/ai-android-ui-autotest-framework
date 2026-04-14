@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from framework.core.steps import StepSpec
 from framework.device.adb import DeviceSnapshot
 from framework.reporting import hooks as reporting_hooks
 from framework.reporting.runtime_store import get_case_report_store
@@ -65,8 +66,8 @@ class FakeLifecycleDriver:
     def clear_runtime_context(self) -> None:
         self.clear_runtime_context_calls += 1
 
-    def record_step(self, **kwargs) -> None:  # noqa: ANN003
-        self.recorded_steps.append(kwargs)
+    def record_step(self, spec: StepSpec) -> None:
+        self.recorded_steps.append(spec.__dict__.copy())
 
 
 class FakeDeviceManager:
