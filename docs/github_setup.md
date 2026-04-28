@@ -78,12 +78,12 @@ git push -u origin main
 
 当前配置文件：
 
-- [/.github/workflows/pr-check.yml](/Volumes/SD%20Card/从入门到%20recode/uiauto/.github/workflows/pr-check.yml)
-- [/.github/workflows/docker-publish.yml](/Volumes/SD%20Card/从入门到%20recode/uiauto/.github/workflows/docker-publish.yml)
-- [/.github/CODEOWNERS](/Volumes/SD%20Card/从入门到%20recode/uiauto/.github/CODEOWNERS)
-- [/.pre-commit-config.yaml](/Volumes/SD%20Card/从入门到%20recode/uiauto/.pre-commit-config.yaml)
-- [scripts/check_commit_message.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/scripts/check_commit_message.py)
-- [scripts/install_git_hooks.sh](/Volumes/SD%20Card/从入门到%20recode/uiauto/scripts/install_git_hooks.sh)
+- [/.github/workflows/pr-check.yml](../.github/workflows/pr-check.yml)
+- [/.github/workflows/docker-publish.yml](../.github/workflows/docker-publish.yml)
+- [/.github/CODEOWNERS](../.github/CODEOWNERS)
+- [/.pre-commit-config.yaml](../.pre-commit-config.yaml)
+- [scripts/check_commit_message.py](../scripts/check_commit_message.py)
+- [scripts/install_git_hooks.sh](../scripts/install_git_hooks.sh)
 
 `PR Check` 除了运行检查外，还会上传一份 `ci-reports` 工件，里面包含：
 
@@ -167,7 +167,7 @@ gh auth status
 为了减少反复推送再等 CI 的时间，建议在本地先执行一遍与 `PR Check` 对齐的脚本：
 
 ```bash
-PYTHON_BIN="/Volumes/SD Card/从入门到 recode/解释器/bin/python" ./scripts/check_pr_gate.sh
+PYTHON_BIN=.venv/bin/python ./scripts/check_pr_gate.sh
 ```
 
 脚本会依次执行：
@@ -186,7 +186,7 @@ PYTHON_BIN="/Volumes/SD Card/从入门到 recode/解释器/bin/python" ./scripts
 推荐在第一次拉起项目后直接安装本地 hooks，这样提交和推送前就能提前发现问题。
 
 ```bash
-PYTHON_BIN="/Volumes/SD Card/从入门到 recode/解释器/bin/python" ./scripts/install_git_hooks.sh
+PYTHON_BIN=.venv/bin/python ./scripts/install_git_hooks.sh
 ```
 
 安装后会启用三类 hook：

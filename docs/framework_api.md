@@ -12,7 +12,7 @@
 
 补充阅读：
 
-- 流程图说明：[docs/framework_flow.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/framework_flow.md)
+- 流程图说明：[docs/framework_flow.md](framework_flow.md)
 
 当前验证通过的关键版本：
 
@@ -20,25 +20,25 @@
 
 补充阅读：
 
-- 设计决策记录：[docs/adr/0001-driver-facade-and-step-capture.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/adr/0001-driver-facade-and-step-capture.md)
-- 升级指南：[docs/upgrade_guide.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/upgrade_guide.md)
-- 性能基线：[docs/performance_baseline.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/performance_baseline.md)
+- 设计决策记录：[docs/adr/0001-driver-facade-and-step-capture.md](adr/0001-driver-facade-and-step-capture.md)
+- 升级指南：[docs/upgrade_guide.md](upgrade_guide.md)
+- 性能基线：[docs/performance_baseline.md](performance_baseline.md)
 
 ## Fixture
 
-pytest 的注册入口仍然是 [tests/conftest.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/tests/conftest.py)，
+pytest 的注册入口仍然是 [tests/conftest.py](../tests/conftest.py)，
 但真正的实现已经拆分到：
 
-- [framework/pytest_plugin.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_plugin.py)：插件总入口、参数注册、并行边界检查
-- [framework/pytest_fixtures.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_fixtures.py)：fixture 定义
-- [framework/reporting/hooks.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/reporting/hooks.py)：真机前后置、失败采集、报告落库
+- [framework/pytest_plugin.py](../framework/pytest_plugin.py)：插件总入口、参数注册、并行边界检查
+- [framework/pytest_fixtures.py](../framework/pytest_fixtures.py)：fixture 定义
+- [framework/reporting/hooks.py](../framework/reporting/hooks.py)：真机前后置、失败采集、报告落库
 
 常用 fixture 如下：
 
 ### `config`
 
 - 类型：`ConfigManager`
-- 作用：读取 `config/config.yaml`
+- 作用：读取 `config/config.local.yaml`，不存在时回退到 `config/config.example.yaml`
 - 场景：在 fixture、生成脚本、设备管理中读取环境配置
 
 ### `driver`
@@ -66,7 +66,7 @@ pytest 的注册入口仍然是 [tests/conftest.py](/Volumes/SD%20Card/从入门
 
 ## `DriverAdapter`
 
-文件：[framework/core/driver.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/driver.py)
+文件：[framework/core/driver.py](../framework/core/driver.py)
 
 公共方法：
 
@@ -96,13 +96,13 @@ pytest 的注册入口仍然是 [tests/conftest.py](/Volumes/SD%20Card/从入门
 
 当前内部协作组件：
 
-- [framework/core/artifact_manager.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/artifact_manager.py)：负责运行时命名和状态采集
-- [framework/core/step_capture.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/step_capture.py)：负责焦点上下文、截图高亮、diff 图和页面层级采集
-- [framework/core/steps.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/steps.py)：定义 `StepSpec` 和 `StepContext`
+- [framework/core/artifact_manager.py](../framework/core/artifact_manager.py)：负责运行时命名和状态采集
+- [framework/core/step_capture.py](../framework/core/step_capture.py)：负责焦点上下文、截图高亮、diff 图和页面层级采集
+- [framework/core/steps.py](../framework/core/steps.py)：定义 `StepSpec` 和 `StepContext`
 
 ## `BasePage`
 
-文件：[framework/core/base_page.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/base_page.py)
+文件：[framework/core/base_page.py](../framework/core/base_page.py)
 
 建议所有页面对象继承 `BasePage`，并只暴露业务语义方法。
 
@@ -126,7 +126,7 @@ pytest 的注册入口仍然是 [tests/conftest.py](/Volumes/SD%20Card/从入门
 
 ### `StepSpec`
 
-文件：[framework/core/steps.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/steps.py)
+文件：[framework/core/steps.py](../framework/core/steps.py)
 
 核心字段：
 
@@ -142,7 +142,7 @@ pytest 的注册入口仍然是 [tests/conftest.py](/Volumes/SD%20Card/从入门
 
 ### `Locator`
 
-文件：[framework/core/locator.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/locator.py)
+文件：[framework/core/locator.py](../framework/core/locator.py)
 
 关键字段：
 
@@ -169,7 +169,7 @@ Locator(
 
 ## `DeviceManager`
 
-文件：[framework/device/manager.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/device/manager.py)
+文件：[framework/device/manager.py](../framework/device/manager.py)
 
 公共方法：
 
@@ -188,7 +188,7 @@ Locator(
 
 ## `AdbClient`
 
-文件：[framework/device/adb.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/device/adb.py)
+文件：[framework/device/adb.py](../framework/device/adb.py)
 
 公共方法：
 

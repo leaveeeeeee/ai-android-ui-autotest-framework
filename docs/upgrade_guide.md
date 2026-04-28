@@ -33,10 +33,10 @@
 旧版本里，大部分逻辑都在 `tests/conftest.py`。
 当前版本已经拆成：
 
-- [tests/conftest.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/tests/conftest.py)：只做插件注册
-- [framework/pytest_plugin.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_plugin.py)：参数注册与并行边界检查
-- [framework/pytest_fixtures.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_fixtures.py)：fixture 装配
-- [framework/reporting/hooks.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/reporting/hooks.py)：前后置和失败采集
+- [tests/conftest.py](../tests/conftest.py)：只做插件注册
+- [framework/pytest_plugin.py](../framework/pytest_plugin.py)：参数注册与并行边界检查
+- [framework/pytest_fixtures.py](../framework/pytest_fixtures.py)：fixture 装配
+- [framework/reporting/hooks.py](../framework/reporting/hooks.py)：前后置和失败采集
 
 影响：
 
@@ -46,8 +46,8 @@
 
 对外接口未变，但内部新增：
 
-- [framework/core/artifact_manager.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/artifact_manager.py)
-- [framework/core/step_capture.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/step_capture.py)
+- [framework/core/artifact_manager.py](../framework/core/artifact_manager.py)
+- [framework/core/step_capture.py](../framework/core/step_capture.py)
 
 影响：
 
@@ -56,7 +56,7 @@
 
 ### 3. 页面对象优先由 fixture 注入 `ImageEngine`
 
-当前 fixture 会显式调用 [framework/vision/factory.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/vision/factory.py) 构建 `ImageEngine`。
+当前 fixture 会显式调用 [framework/vision/factory.py](../framework/vision/factory.py) 构建 `ImageEngine`。
 `BasePage(driver)` 仍然可用，但只是兼容性回退。
 
 建议：

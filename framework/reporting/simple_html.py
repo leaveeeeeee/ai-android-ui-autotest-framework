@@ -5,12 +5,15 @@ from __future__ import annotations
 import os
 import shutil
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from framework.core.defaults import default_value
 from framework.reporting.runtime_store import get_case_report_store
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
@@ -39,15 +42,22 @@ def pytest_configure(config: pytest.Config) -> None:
 
     target = Path(report_path).resolve()
     reports_root = target.parent
-    run_id = time.strftime("%Y%m%d_%H%M%S")
+    run_id = _build_run_id()
     run_root = reports_root / "runs" / run_id
     run_root.mkdir(parents=True, exist_ok=True)
+    reporting_config = _load_reporting_config(config)
 
     config._framework_simple_html = {
         "path": target,
         "reports_root": reports_root,
         "run_root": run_root,
         "run_id": run_id,
+        "history_retention": int(
+            reporting_config.get(
+                "history_retention",
+                default_value("reporting.history_retention"),
+            )
+        ),
         "started_at": time.time(),
         "rows": [],
     }
@@ -188,6 +198,11 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
     )
     (reports_root / "index.html").write_text(latest_html, encoding="utf-8")
     html_state["path"].write_text(latest_html, encoding="utf-8")
+    _prune_old_runs(
+        reports_root,
+        current_run_id=html_state["run_id"],
+        keep=int(html_state.get("history_retention", default_value("reporting.history_retention"))),
+    )
 
 
 def _build_case_bundle(run_root: Path, row: dict[str, Any]) -> dict[str, Any]:
@@ -318,6 +333,46 @@ def _duration_label(duration_ms: int) -> str:
 
 def _slugify(value: str) -> str:
     return "".join(char if char.isalnum() else "_" for char in value).strip("_").lower() or "case"
+
+
+def _build_run_id() -> str:
+    github_run_id = os.getenv("GITHUB_RUN_ID")
+    if github_run_id:
+        return github_run_id
+    return f"{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S_%f')}_{uuid4().hex[:8]}"
+
+
+def _load_reporting_config(config: pytest.Config) -> dict[str, Any]:
+    try:
+        from framework.core.config import ConfigManager
+
+        config_path = config.getoption("--config")
+        manager = ConfigManager.load(config_path)
+        reporting_config = manager.get("reporting", {}) or {}
+        return dict(reporting_config)
+    except Exception:
+        return {}
+
+
+def _prune_old_runs(reports_root: Path, *, current_run_id: str, keep: int) -> None:
+    if keep <= 0:
+        return
+
+    runs_root = reports_root / "runs"
+    if not runs_root.exists():
+        return
+
+    run_dirs = sorted(
+        (path for path in runs_root.iterdir() if path.is_dir()),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    keep_names = {current_run_id}
+    keep_names.update(path.name for path in run_dirs[:keep])
+    for run_dir in run_dirs:
+        if run_dir.name in keep_names:
+            continue
+        shutil.rmtree(run_dir)
 
 
 def _recent_run_entries(

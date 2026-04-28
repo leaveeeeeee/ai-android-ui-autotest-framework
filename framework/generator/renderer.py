@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from textwrap import dedent, indent
 
 from framework.generator.models import TextCaseSpec
@@ -7,7 +8,13 @@ from framework.generator.models import TextCaseSpec
 
 def render_test_case(spec: TextCaseSpec) -> str:
     marker_lines = "\n".join(f"@pytest.mark.{marker}" for marker in spec.marker_list)
-    if spec.has_executable_calls:
+    safety_errors = spec.safety_errors
+    ast_error = _python_calls_ast_error(spec.python_calls) if spec.has_executable_calls else ""
+    if safety_errors:
+        body = f"pytest.skip({'Unsafe generated case: ' + '; '.join(safety_errors)!r})"
+    elif ast_error:
+        body = f"pytest.skip({'Invalid generated python_calls: ' + ast_error!r})"
+    elif spec.has_executable_calls:
         body = spec.python_calls.rstrip()
     else:
         body = (
@@ -30,10 +37,18 @@ import pytest
 
 
 {marker_lines}
-def {spec.test_name}({spec.fixture}):
+def {spec.test_name}({spec.render_fixture}):
 {indent(docstring, "    ")}
 {indent(body, "    ")}
 """
+
+
+def _python_calls_ast_error(python_calls: str) -> str:
+    try:
+        ast.parse(python_calls)
+    except SyntaxError as exc:
+        return str(exc).replace('"', "'")
+    return ""
 
 
 def render_ai_prompt(spec: TextCaseSpec) -> str:
@@ -42,7 +57,7 @@ def render_ai_prompt(spec: TextCaseSpec) -> str:
 你是一个安卓 UI 自动化框架代码生成助手，请基于下面的测试文本，为当前框架生成可执行 pytest 用例。
 
 ## 生成约束
-- 使用现有 fixture: `{spec.fixture}`
+- 使用现有 fixture: `{spec.render_fixture}`
 - 使用现有页面对象: `{spec.page_object}`
 - 优先调用页面对象业务方法，不直接在测试里散落底层 driver 调用
 - 测试函数命名必须为 `{spec.test_name}`

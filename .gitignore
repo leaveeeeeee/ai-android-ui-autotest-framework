@@ -9,6 +9,9 @@ __pycache__/
 build/
 dist/
 
+config/config.local.yaml
+config/config.yaml
+
 artifacts/report_data/*
 !artifacts/report_data/.gitkeep
 

@@ -11,9 +11,7 @@ has_required_modules() {
   "${candidate}" -c "import pre_commit, pytest" >/dev/null 2>&1
 }
 
-if [[ -x "${PROJECT_ROOT}/../解释器/bin/python" ]] && has_required_modules "${PROJECT_ROOT}/../解释器/bin/python"; then
-  DEFAULT_PYTHON="${PROJECT_ROOT}/../解释器/bin/python"
-elif [[ -x "${PROJECT_ROOT}/.venv/bin/python" ]] && has_required_modules "${PROJECT_ROOT}/.venv/bin/python"; then
+if [[ -x "${PROJECT_ROOT}/.venv/bin/python" ]] && has_required_modules "${PROJECT_ROOT}/.venv/bin/python"; then
   DEFAULT_PYTHON="${PROJECT_ROOT}/.venv/bin/python"
 elif command -v python3 >/dev/null 2>&1 && has_required_modules "$(command -v python3)"; then
   DEFAULT_PYTHON="$(command -v python3)"
@@ -54,7 +52,7 @@ rm -rf "${TMP_TEST_DIR}" "${TMP_PROMPT_DIR}"
   --output-dir "${TMP_TEST_DIR}" \
   --prompt-dir "${TMP_PROMPT_DIR}"
 "${PYTHON_BIN}" -m compileall "${TMP_TEST_DIR}"
-"${PYTHON_BIN}" -m pytest --collect-only -q -c pytest.ini \
+"${PYTHON_BIN}" -m pytest --collect-only -q -c pyproject.toml \
   "${TMP_TEST_DIR}/test_search_via_baidu_search_chatgpt.py"
 
 echo "[7/8] 运行非真机测试"

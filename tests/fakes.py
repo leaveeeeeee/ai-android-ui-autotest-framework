@@ -26,13 +26,19 @@ class FakePageDriver:
         self.sent_keys: list[tuple[str, bool]] = []
         self.recorded_steps: list[StepSpec] = []
 
-    def click(self, locator: Locator) -> None:
+    def click(self, locator: Locator):
         if self.click_error is not None:
             raise self.click_error
+        from framework.core.driver import UiActionResult
 
-    def set_text(self, locator: Locator, value: str) -> None:
+        return UiActionResult(locator.name, locator.strategy, None)
+
+    def set_text(self, locator: Locator, value: str):
         if self.set_text_error is not None:
             raise self.set_text_error
+        from framework.core.driver import UiActionResult
+
+        return UiActionResult(locator.name, locator.strategy, None)
 
     def clear_text(self, locator: Locator) -> None:
         return None
@@ -70,19 +76,38 @@ class FakeImageEngine:
 
 
 class FakeCaptureDevice:
+    def __init__(self) -> None:
+        self.clicked_points: list[tuple[int, int]] = []
+        self.sent_keys: list[tuple[str, bool | None]] = []
+
     def screenshot(self, path: str) -> None:
         Path(path).write_bytes(b"fake-png")
 
     def dump_hierarchy(self) -> str:
         return "<hierarchy />"
 
+    def click(self, x: int, y: int) -> None:
+        self.clicked_points.append((x, y))
+
+    def send_keys(self, value: str, clear: bool | None = None) -> None:
+        self.sent_keys.append((value, clear))
+
 
 class FakeSelector:
-    def __init__(self, matched: bool = False, click_error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        matched: bool = False,
+        click_error: Exception | None = None,
+        set_text_error: Exception | None = None,
+        bounds: tuple[int, int, int, int] | None = None,
+    ) -> None:
         self.matched = matched
         self.click_error = click_error
+        self.set_text_error = set_text_error
+        self.info = {"bounds": bounds} if bounds is not None else {}
         self.wait_calls: list[float] = []
         self.click_calls = 0
+        self.set_text_calls: list[str] = []
 
     @property
     def exists(self) -> bool:
@@ -96,6 +121,15 @@ class FakeSelector:
         self.click_calls += 1
         if self.click_error is not None:
             raise self.click_error
+
+    def set_text(self, value: str) -> None:
+        self.set_text_calls.append(value)
+        if self.set_text_error is not None:
+            raise self.set_text_error
+
+    def get(self, timeout: float = 0) -> "FakeSelector":
+        self.wait_calls.append(timeout)
+        return self
 
 
 class FakeAdb:

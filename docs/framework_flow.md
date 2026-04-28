@@ -9,7 +9,7 @@
 
 ```mermaid
 flowchart TD
-    A[准备配置文件 config/config.yaml] --> B[编写或生成测试用例]
+    A[准备配置文件 config/config.local.yaml] --> B[编写或生成测试用例]
     B --> C[执行脚本 scripts/run_via_baidu_report.sh]
     C --> D[pytest 加载 tests/conftest.py]
     D --> E[framework.pytest_plugin 注册 fixtures 和 hooks]
@@ -90,8 +90,8 @@ flowchart TD
 
 ## 推荐阅读顺序
 
-1. 先看 [README.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/README.md)
-2. 再看 [docs/framework_api.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/framework_api.md)
-3. 然后看 [docs/adr/0001-driver-facade-and-step-capture.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/adr/0001-driver-facade-and-step-capture.md)
-4. 再看 [framework/pytest_plugin.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_plugin.py) 和 [framework/reporting/hooks.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/reporting/hooks.py)
-5. 最后结合实际页面对象查看 [framework/pages/via_baidu_page.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pages/via_baidu_page.py)
+1. 先看 [README.md](../README.md)
+2. 再看 [docs/framework_api.md](framework_api.md)
+3. 然后看 [docs/adr/0001-driver-facade-and-step-capture.md](adr/0001-driver-facade-and-step-capture.md)
+4. 再看 [framework/pytest_plugin.py](../framework/pytest_plugin.py) 和 [framework/reporting/hooks.py](../framework/reporting/hooks.py)
+5. 最后结合实际页面对象查看 [framework/pages/via_baidu_page.py](../framework/pages/via_baidu_page.py)

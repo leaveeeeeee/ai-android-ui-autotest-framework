@@ -42,11 +42,13 @@ class DeviceManager:
     def build_driver(self) -> DriverAdapter:
         """基于当前配置构建 `DriverAdapter`。"""
         framework_config = self.config.get("framework", {}) or {}
+        reporting_config = self.config.get("reporting", {}) or {}
         return DriverAdapter(
             serial=self.serial,
             default_timeout=self.waiter.timeout,
             retry_interval=self.waiter.interval,
             framework_config=framework_config,
+            reporting_config=reporting_config,
         )
 
     def adb(self) -> AdbClient:

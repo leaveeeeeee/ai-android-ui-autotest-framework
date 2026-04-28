@@ -43,8 +43,11 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--config",
         action="store",
-        default="config/config.yaml",
-        help="指定框架配置文件路径，默认使用 config/config.yaml。",
+        default="config/config.local.yaml",
+        help=(
+            "指定框架配置文件路径。默认优先使用 config/config.local.yaml，"
+            "不存在时回退到 config/config.example.yaml。"
+        ),
     )
 
 

@@ -8,6 +8,8 @@ from framework.reporting.runtime_store import get_case_report_store
 from framework.reporting.simple_html import (
     ASSETS_DIR,
     _build_case_bundle,
+    _build_run_id,
+    _prune_old_runs,
     _recent_run_entries,
     _render_case_page,
     add_test_row,
@@ -219,3 +221,35 @@ def test_report_css_includes_responsive_breakpoints() -> None:
 
     assert "@media (max-width: 1080px)" in css
     assert "@media (max-width: 720px)" in css
+
+
+def test_build_run_id_prefers_github_run_id(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.setenv("GITHUB_RUN_ID", "123456789")
+
+    assert _build_run_id() == "123456789"
+
+
+def test_build_run_id_uses_microseconds_and_suffix(monkeypatch) -> None:  # noqa: ANN001
+    monkeypatch.delenv("GITHUB_RUN_ID", raising=False)
+
+    run_id = _build_run_id()
+
+    assert len(run_id.split("_")) == 4
+    assert len(run_id.rsplit("_", 1)[-1]) == 8
+
+
+def test_prune_old_runs_keeps_recent_runs_and_current(tmp_path: Path) -> None:
+    reports_root = tmp_path / "reports"
+    runs_root = reports_root / "runs"
+    runs_root.mkdir(parents=True)
+    for index in range(5):
+        run_dir = runs_root / f"run_{index}"
+        run_dir.mkdir()
+
+    current = runs_root / "current"
+    current.mkdir()
+    _prune_old_runs(reports_root, current_run_id="current", keep=2)
+
+    remaining = {path.name for path in runs_root.iterdir()}
+    assert "current" in remaining
+    assert len(remaining) == 2
