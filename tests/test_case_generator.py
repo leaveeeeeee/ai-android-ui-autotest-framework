@@ -45,6 +45,45 @@ def test_render_test_case_supports_feature_marker():
     assert '@pytest.mark.feature("search")' in code
 
 
+def test_render_test_case_skips_unsafe_fixture_and_marker() -> None:
+    spec = TextCaseSpec.from_mapping(
+        {
+            "case_id": "bad_case",
+            "module": "search",
+            "title": "bad",
+            "fixture": "request):\n    assert False\n#",
+            "python_calls": "assert True",
+            "markers": 'smoke,evil("x")',
+        }
+    )
+
+    code = render_test_case(spec)
+
+    assert "@pytest.mark.smoke" in code
+    assert "evil" not in code.split("def ", maxsplit=1)[0]
+    assert "def test_search_bad_case(via_baidu_page):" in code
+    assert "Unsafe generated case" in code
+    assert "fixture is not allowed" in code
+
+
+def test_render_test_case_skips_invalid_python_calls() -> None:
+    spec = TextCaseSpec.from_mapping(
+        {
+            "case_id": "bad_python",
+            "module": "search",
+            "title": "bad python",
+            "fixture": "via_baidu_page",
+            "python_calls": "via_baidu_page.search(",
+            "markers": "smoke,device",
+        }
+    )
+
+    code = render_test_case(spec)
+
+    assert "Invalid generated python_calls" in code
+    assert "via_baidu_page.search(" not in code.split("pytest.skip", maxsplit=1)[-1]
+
+
 def test_render_ai_prompt_for_incomplete_case():
     spec = TextCaseSpec.from_mapping(
         {

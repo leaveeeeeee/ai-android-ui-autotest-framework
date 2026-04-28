@@ -8,7 +8,7 @@ REPORT_LATEST_PATH="$ROOT_DIR/artifacts/reports/latest/index.html"
 PYTEST_HTML_REPORT_PATH="$ROOT_DIR/artifacts/reports/via_baidu_pytest_html_report.html"
 REPORT_DATA_DIR="$ROOT_DIR/artifacts/report_data"
 ALLURE_RESULTS_DIR="$REPORT_DATA_DIR/allure-results"
-PYTHON_BIN="/Volumes/SD Card/从入门到 recode/解释器/bin/python"
+PYTHON_BIN="${PYTHON_BIN:-python}"
 
 mkdir -p "$ROOT_DIR/artifacts/reports"
 mkdir -p "$REPORT_DATA_DIR"

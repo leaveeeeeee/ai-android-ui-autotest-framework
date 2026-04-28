@@ -30,10 +30,16 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          python -m pip install .
+          python -m pip install .[dev]
 
-      - name: Run unit tests
-        run: python -m pytest tests/test_case_generator.py tests/test_image_engine.py -q
+      - name: Check dependency integrity
+        run: python -m pip check
+
+      - name: Compile sources
+        run: python -m compileall framework tests
+
+      - name: Run non-device tests
+        run: python -m pytest tests -m "not device" -q
 
   publish-image:
     runs-on: ubuntu-latest

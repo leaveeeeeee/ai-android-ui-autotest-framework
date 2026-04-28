@@ -52,18 +52,44 @@ class ArtifactManager:
         *,
         name: str,
         screenshotter: Callable[[str | Path], str],
-        page_source_provider: Callable[[], str],
+        page_source_provider: Callable[[], str] | None,
+        include_page_source: bool = True,
     ) -> tuple[str, str]:
         """采集当前截图和页面层级。"""
 
         screenshot_dir = Path(setting_from_mapping(self.framework_config, "screenshot_dir"))
         source_dir = Path(setting_from_mapping(self.framework_config, "page_source_dir"))
         screenshot_dir.mkdir(parents=True, exist_ok=True)
-        source_dir.mkdir(parents=True, exist_ok=True)
+        if include_page_source:
+            source_dir.mkdir(parents=True, exist_ok=True)
 
         safe_name = self.build_artifact_name(name, category="state")
         screenshot_path = screenshot_dir / f"{safe_name}.png"
         source_path = source_dir / f"{safe_name}.xml"
         screenshotter(screenshot_path)
-        source_path.write_text(page_source_provider(), encoding="utf-8")
-        return str(screenshot_path), str(source_path)
+        _resize_screenshot_if_needed(
+            screenshot_path,
+            max_width=int(setting_from_mapping(self.framework_config, "max_screenshot_width")),
+        )
+        if include_page_source and page_source_provider is not None:
+            source_path.write_text(page_source_provider(), encoding="utf-8")
+            return str(screenshot_path), str(source_path)
+        return str(screenshot_path), ""
+
+
+def _resize_screenshot_if_needed(path: Path, *, max_width: int) -> None:
+    if max_width <= 0:
+        return
+
+    try:
+        from PIL import Image
+
+        with Image.open(path) as image:
+            if image.width <= max_width:
+                return
+            ratio = max_width / image.width
+            height = max(1, int(image.height * ratio))
+            resized = image.resize((max_width, height))
+            resized.save(path)
+    except Exception:
+        return

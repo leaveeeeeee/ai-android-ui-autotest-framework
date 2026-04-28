@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from framework.core.driver import DriverAdapter
+from framework.core.driver import DriverAdapter, UiActionResult
 from framework.core.exceptions import ElementNotFoundError
 from framework.core.locator import Locator
 from framework.core.steps import StepSpec
@@ -13,15 +13,21 @@ from tests.fakes import FakeCaptureDevice, FakeSelector, FakeStepRecorder
 
 class FakeLookupDevice(FakeCaptureDevice):
     def __init__(self, selector: FakeSelector | None = None) -> None:
+        super().__init__()
         self.selector = selector or FakeSelector(matched=False)
 
     def __call__(self, **kwargs):
         self.kwargs = kwargs
         return self.selector
 
+    def xpath(self, value: str):
+        self.xpath_value = value
+        return self.selector
+
 
 class FlakyClickDevice(FakeCaptureDevice):
     def __init__(self) -> None:
+        super().__init__()
         self.selector = FakeSelector(matched=True, click_error=RuntimeError("tap failed"))
         self.calls = 0
 
@@ -91,6 +97,81 @@ def test_driver_click_retries_until_success() -> None:
 
     assert device.calls == 2
     assert device.selector.click_calls == 2
+
+
+def test_driver_click_returns_action_result_with_bounds() -> None:
+    driver = DriverAdapter(serial="SER123")
+    device = FakeLookupDevice(FakeSelector(matched=True, bounds=(10, 20, 110, 80)))
+    driver._device = device
+
+    result = driver.click(Locator(name="search_input", strategy="xpath", value="//*[@text='q']"))
+
+    assert result == UiActionResult(
+        locator_name="search_input",
+        strategy="xpath",
+        bounds=(10, 20, 110, 80),
+    )
+    assert device.clicked_points == [(60, 50)]
+
+
+def test_driver_click_result_marks_fallback_locator() -> None:
+    driver = DriverAdapter(serial="SER123")
+    primary = FakeSelector(matched=False)
+    fallback = FakeSelector(matched=True, bounds=(0, 0, 40, 40))
+
+    class FallbackDevice(FakeCaptureDevice):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def __call__(self, **kwargs):
+            self.calls += 1
+            return primary if self.calls == 1 else fallback
+
+    device = FallbackDevice()
+    driver._device = device
+    locator = Locator(
+        name="primary",
+        strategy="resource_id",
+        value="missing",
+        fallback=[Locator(name="fallback", strategy="text", value="Search")],
+    )
+
+    result = driver.click(locator)
+
+    assert result.locator_name == "fallback"
+    assert result.used_fallback is True
+    assert result.bounds == (0, 0, 40, 40)
+
+
+def test_driver_set_text_raises_after_all_xpath_writers_fail() -> None:
+    driver = DriverAdapter(serial="SER123")
+
+    class BrokenInputDevice(FakeCaptureDevice):
+        def __init__(self) -> None:
+            super().__init__()
+            self.selector = FakeSelector(
+                matched=True,
+                set_text_error=RuntimeError("element writer failed"),
+                bounds=(0, 0, 100, 50),
+            )
+
+        def xpath(self, value: str):
+            return self.selector
+
+        def send_keys(self, value: str, clear: bool | None = None) -> None:
+            super().send_keys(value, clear)
+            raise RuntimeError("device writer failed")
+
+    device = BrokenInputDevice()
+    driver._device = device
+
+    with pytest.raises(ElementNotFoundError) as exc_info:
+        driver.set_text(Locator(name="search_input", strategy="xpath", value="//*[@id='kw']"), "q")
+
+    assert "Failed to set text" in str(exc_info.value)
+    assert device.clicked_points == [(50, 25)]
+    assert device.sent_keys == [("q", False), ("q", True)]
 
 
 def test_driver_record_step_includes_duration() -> None:

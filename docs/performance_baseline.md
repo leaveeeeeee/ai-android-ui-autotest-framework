@@ -41,7 +41,7 @@
 
 使用：
 
-- [scripts/run_via_baidu_report.sh](/Volumes/SD%20Card/从入门到%20recode/uiauto/scripts/run_via_baidu_report.sh)
+- [scripts/run_via_baidu_report.sh](../scripts/run_via_baidu_report.sh)
 
 观察：
 
@@ -57,7 +57,7 @@
 
 采集环境：
 
-- Python: `'/Volumes/SD Card/从入门到 recode/解释器/bin/python'`
+- Python: project virtualenv or `python` on PATH
 - 分支：`codex-driver-step-capture-cleanup`
 
 ### 主机侧
@@ -77,10 +77,10 @@
 
 当后续重构下列模块时，建议同步更新这份文档：
 
-- [framework/core/driver.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/driver.py)
-- [framework/core/step_capture.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/step_capture.py)
-- [framework/vision/image_engine.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/vision/image_engine.py)
-- [framework/reporting/simple_html.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/reporting/simple_html.py)
+- [framework/core/driver.py](../framework/core/driver.py)
+- [framework/core/step_capture.py](../framework/core/step_capture.py)
+- [framework/vision/image_engine.py](../framework/vision/image_engine.py)
+- [framework/reporting/simple_html.py](../framework/reporting/simple_html.py)
 
 ## 解读原则
 

@@ -37,6 +37,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "default_retry_interval": 0.5,
         "click_retry_count": 2,
         "click_retry_interval": 0.5,
+        "max_screenshot_width": 1440,
         "logging": {
             "level": "INFO",
             "format": "%(asctime)s | %(levelname)s | %(name)s | %(message)s",
@@ -47,6 +48,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "home_packages": DEFAULT_HOME_PACKAGES,
         "transient_packages": DEFAULT_TRANSIENT_PACKAGES,
     },
+    "reporting": {
+        "capture_policy": "normal",
+        "capture_page_source": "on_failure",
+        "capture_diff": "marked_steps",
+        "history_retention": 20,
+    },
 }
 
 
@@ -54,11 +61,15 @@ def default_value(dotted_key: str) -> Any:
     """读取框架默认配置。"""
 
     candidates = [dotted_key]
-    if not dotted_key.startswith("framework.") and not dotted_key.startswith("device."):
+    if not dotted_key.startswith(("framework.", "device.", "reporting.")):
         if "." in dotted_key:
-            candidates.extend([f"framework.{dotted_key}", f"device.{dotted_key}"])
+            candidates.extend(
+                [f"framework.{dotted_key}", f"device.{dotted_key}", f"reporting.{dotted_key}"]
+            )
         else:
-            candidates.extend([f"framework.{dotted_key}", f"device.{dotted_key}"])
+            candidates.extend(
+                [f"framework.{dotted_key}", f"device.{dotted_key}", f"reporting.{dotted_key}"]
+            )
 
     for candidate in candidates:
         current: Any = DEFAULT_CONFIG

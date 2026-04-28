@@ -3,6 +3,8 @@
 __pycache__
 .pytest_cache
 artifacts
+config/config.local.yaml
+config/config.yaml
 *.pyc
 *.pyo
 *.pyd

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,16 @@ from framework.core.protocols import StepContextProvider, StepRecorder
 from framework.core.step_capture import StepCaptureService
 from framework.core.steps import StepSpec
 from framework.core.waiter import Waiter
+
+
+@dataclass(frozen=True)
+class UiActionResult:
+    """一次 UI 动作的稳定结果，供页面层复用定位信息。"""
+
+    locator_name: str
+    strategy: str
+    bounds: Bounds | None
+    used_fallback: bool = False
 
 
 class DriverAdapter:
@@ -31,16 +42,21 @@ class DriverAdapter:
         default_timeout: float = 10.0,
         retry_interval: float = 0.5,
         framework_config: dict[str, Any] | None = None,
+        reporting_config: dict[str, Any] | None = None,
     ) -> None:
         self.serial = serial
         self.logger = setup_logger()
         self.waiter = Waiter(timeout=default_timeout, interval=retry_interval)
         self.framework_config = framework_config or {}
+        self.reporting_config = reporting_config or {}
         self.step_recorder: StepRecorder | None = None
         self.step_context_provider: StepContextProvider | None = None
         self._device = None
         self.artifact_manager = ArtifactManager(self.framework_config)
-        self.step_capture = StepCaptureService(self.artifact_manager)
+        self.step_capture = StepCaptureService(
+            self.artifact_manager,
+            reporting_config=self.reporting_config,
+        )
         self.click_retry_count = int(
             setting_from_mapping(self.framework_config, "click_retry_count")
         )
@@ -80,26 +96,10 @@ class DriverAdapter:
         - 主定位失败后按顺序尝试 fallback
         - 全部失败则抛出 `ElementNotFoundError`
         """
-        element = self._find_once(locator)
-        if element is not None:
-            return element
+        element, _, _ = self._find_with_locator(locator)
+        return element
 
-        for fallback in locator.fallback:
-            element = self._find_once(fallback)
-            if element is not None:
-                self.logger.warning(
-                    "Primary locator '%s' failed; fallback '%s' matched.",
-                    locator.name,
-                    fallback.name,
-                )
-                return element
-
-        attempted = [locator.describe(), *(fallback.describe() for fallback in locator.fallback)]
-        raise ElementNotFoundError(
-            "Unable to locate element. Attempted locators: " + " | ".join(attempted)
-        )
-
-    def click(self, locator: Locator) -> None:
+    def click(self, locator: Locator) -> UiActionResult:
         """点击元素。
 
         对 XPath/WebView 场景优先使用元素中心点点击，减少 `.click()` 在真机上的不稳定问题。
@@ -108,14 +108,24 @@ class DriverAdapter:
         attempts = max(1, self.click_retry_count)
         for attempt in range(1, attempts + 1):
             try:
-                element = self.find(locator)
-                if locator.strategy == "xpath":
-                    bounds = extract_bounds(element)
+                element, matched_locator, used_fallback = self._find_with_locator(locator)
+                bounds = extract_bounds(element)
+                if matched_locator.strategy == "xpath":
                     if bounds is not None:
                         self._click_bounds_center(bounds)
-                        return
+                        return UiActionResult(
+                            locator_name=matched_locator.name,
+                            strategy=matched_locator.strategy,
+                            bounds=bounds,
+                            used_fallback=used_fallback,
+                        )
                 element.click()
-                return
+                return UiActionResult(
+                    locator_name=matched_locator.name,
+                    strategy=matched_locator.strategy,
+                    bounds=bounds,
+                    used_fallback=used_fallback,
+                )
             except Exception as exc:
                 last_error = exc
                 if attempt == attempts:
@@ -131,7 +141,7 @@ class DriverAdapter:
         """按坐标点击屏幕。"""
         self.device.click(x, y)
 
-    def set_text(self, locator: Locator, value: str) -> None:
+    def set_text(self, locator: Locator, value: str) -> UiActionResult:
         """向元素写入文本。
 
         针对 WebView/XPath 输入场景，这里会做多重兜底：
@@ -141,9 +151,15 @@ class DriverAdapter:
 
         写入完成后，会通过页面层级再次确认文本是否已真正出现在页面中。
         """
-        element = self.find(locator)
-        if locator.strategy == "xpath":
-            bounds = extract_bounds(element)
+        element, matched_locator, used_fallback = self._find_with_locator(locator)
+        bounds = extract_bounds(element)
+        result = UiActionResult(
+            locator_name=matched_locator.name,
+            strategy=matched_locator.strategy,
+            bounds=bounds,
+            used_fallback=used_fallback,
+        )
+        if matched_locator.strategy == "xpath":
             if bounds is not None:
                 self._click_bounds_center(bounds)
             else:
@@ -162,7 +178,7 @@ class DriverAdapter:
                     continue
 
                 if not value or self._page_contains_text(value):
-                    return
+                    return result
 
             message = (
                 "Failed to set text: "
@@ -173,6 +189,7 @@ class DriverAdapter:
             raise ElementNotFoundError(message)
 
         element.set_text(value)
+        return result
 
     def clear_text(self, locator: Locator) -> None:
         """清空输入框内容。"""
@@ -189,8 +206,23 @@ class DriverAdapter:
         """判断元素是否存在。"""
         try:
             return self._find_once(locator) is not None
-        except Exception:
+        except ElementNotFoundError as exc:
+            self.logger.debug("Locator does not exist: %s. %s", locator.describe(), exc)
             return False
+        except DeviceConnectionError:
+            self.logger.error(
+                "Device connection failed while checking %s.",
+                locator.describe(),
+                exc_info=True,
+            )
+            raise
+        except Exception:
+            self.logger.error(
+                "Unexpected locator failure while checking %s.",
+                locator.describe(),
+                exc_info=True,
+            )
+            raise
 
     def send_keys(self, value: str, *, clear: bool = False) -> None:
         """直接调用设备级输入能力。
@@ -322,6 +354,28 @@ class DriverAdapter:
 
         obj = self.device(**kwargs)
         return self._wait_for_element(obj, locator)
+
+    def _find_with_locator(self, locator: Locator) -> tuple[Any, Locator, bool]:
+        """查找元素并返回实际命中的定位器。"""
+
+        element = self._find_once(locator)
+        if element is not None:
+            return element, locator, False
+
+        for fallback in locator.fallback:
+            element = self._find_once(fallback)
+            if element is not None:
+                self.logger.warning(
+                    "Primary locator '%s' failed; fallback '%s' matched.",
+                    locator.name,
+                    fallback.name,
+                )
+                return element, fallback, True
+
+        attempted = [locator.describe(), *(fallback.describe() for fallback in locator.fallback)]
+        raise ElementNotFoundError(
+            "Unable to locate element. Attempted locators: " + " | ".join(attempted)
+        )
 
     def _wait_for_element(self, candidate: Any, locator: Locator) -> Any | None:
         """统一通过 `Waiter` 等待元素出现。"""

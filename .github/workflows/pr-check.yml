@@ -99,7 +99,7 @@ jobs:
             --output-dir /tmp/generated-tests \
             --prompt-dir /tmp/generated-prompts
           python -m compileall /tmp/generated-tests
-          python -m pytest --collect-only -q -c pytest.ini /tmp/generated-tests/test_search_via_baidu_search_chatgpt.py
+          python -m pytest --collect-only -q -c pyproject.toml /tmp/generated-tests/test_search_via_baidu_search_chatgpt.py
 
   unit-tests:
     name: Unit Tests (Python ${{ matrix.python-version }})

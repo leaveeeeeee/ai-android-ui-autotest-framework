@@ -45,7 +45,7 @@ uiauto/
 
 ```mermaid
 flowchart TD
-    A[配置 config.yaml] --> B[执行 pytest 或运行脚本]
+    A[配置 config.local.yaml 或环境变量] --> B[执行 pytest 或运行脚本]
     B --> C[tests/conftest.py 注册 framework.pytest_plugin]
     C --> D[pytest_plugin 加载 fixtures 和 reporting hooks]
     D --> E[DeviceManager 做前置检查]
@@ -62,7 +62,7 @@ flowchart TD
 
 详细流程图见：
 
-- [docs/framework_flow.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/framework_flow.md)
+- [docs/framework_flow.md](docs/framework_flow.md)
 
 ## 报告怎么找
 
@@ -103,45 +103,64 @@ flowchart TD
 1. 安装依赖
 
 ```bash
-'/Volumes/SD Card/从入门到 recode/解释器/bin/python' -m venv .venv
+python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+python -m pip install -U pip
+python -m pip install -e ".[dev]"
 ```
 
 2. 初始化配置
 
 ```bash
-cp config/config.yaml.example config/config.yaml
+cp config/config.example.yaml config/config.local.yaml
 ```
 
-3. 运行当前真机示例
+`config.local.yaml` 只放本机/本设备信息，不提交到仓库。常用配置也可以直接用环境变量覆盖：
+
+```bash
+ANDROID_SERIAL=xxx \
+APP_PACKAGE=mark.via \
+APP_ACTIVITY=.Shell \
+BASELINE_URL=https://www.baidu.com \
+REPORTS_ROOT=artifacts/reports \
+IMAGE_THRESHOLD=0.92 \
+pytest tests/test_via_baidu_search.py -m "smoke and device" --simple-html=artifacts/reports/via_baidu_report.html
+```
+
+3. 先跑纯单测
+
+```bash
+pytest tests -m "not device"
+```
+
+4. 运行当前真机示例
 
 ```bash
 ./scripts/run_via_baidu_report.sh
 ```
 
-4. 打开报告
+5. 打开报告
 
 ```text
 artifacts/reports/index.html
 ```
 
-5. 如果本机安装了 Allure CLI，再生成 Allure 静态页
+6. 如果本机安装了 Allure CLI，再生成 Allure 静态页
 
 ```bash
 ./scripts/generate_allure_report.sh
 ```
 
-6. 推荐顺手安装本地 git hooks
+7. 推荐顺手安装本地 git hooks
 
 ```bash
-PYTHON_BIN="/Volumes/SD Card/从入门到 recode/解释器/bin/python" ./scripts/install_git_hooks.sh
+./scripts/install_git_hooks.sh
 ```
 
-7. 运行纯单测时可以并行，但真机用例不要加 `-n`
+8. 本地快速失败时手动加 `--maxfail=1`，不要把它作为全局默认
 
 ```bash
-'/Volumes/SD Card/从入门到 recode/解释器/bin/python' -m pytest tests -m "not device"
+pytest --maxfail=1 tests -m "not device"
 ```
 
 Allure 原始结果会固定写到：
@@ -158,9 +177,9 @@ artifacts/report_data/allure-report/
 
 ## 当前真实业务示例
 
-- 用例文件：[tests/test_via_baidu_search.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/tests/test_via_baidu_search.py)
-- 页面对象：[framework/pages/via_baidu_page.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pages/via_baidu_page.py)
-- 运行脚本：[scripts/run_via_baidu_report.sh](/Volumes/SD%20Card/从入门到%20recode/uiauto/scripts/run_via_baidu_report.sh)
+- 用例文件：[tests/test_via_baidu_search.py](tests/test_via_baidu_search.py)
+- 页面对象：[framework/pages/via_baidu_page.py](framework/pages/via_baidu_page.py)
+- 运行脚本：[scripts/run_via_baidu_report.sh](scripts/run_via_baidu_report.sh)
 
 这个场景会通过 Via 浏览器打开 `https://www.baidu.com`，输入 `chatgpt`，点击搜索并校验结果页。
 
@@ -171,7 +190,7 @@ artifacts/report_data/allure-report/
 结构化文本直接生成：
 
 ```bash
-'/Volumes/SD Card/从入门到 recode/解释器/bin/python' scripts/generate_cases_from_excel.py examples/case_inputs/test_cases_template.csv
+python scripts/generate_cases_from_excel.py examples/case_inputs/test_cases_template.csv
 ```
 
 如果录入文本缺少 `python_calls`，脚本会同时生成 AI prompt 到：
@@ -185,17 +204,17 @@ artifacts/report_data/ai-prompts/
 
 相关文档：
 
-- [docs/framework_api.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/framework_api.md)
-- [docs/framework_flow.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/framework_flow.md)
-- [docs/test_case_entry_standard.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/test_case_entry_standard.md)
-- [docs/case_generation_workflow.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/case_generation_workflow.md)
-- [docs/adr/0001-driver-facade-and-step-capture.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/adr/0001-driver-facade-and-step-capture.md)
-- [docs/upgrade_guide.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/upgrade_guide.md)
-- [docs/performance_baseline.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/performance_baseline.md)
+- [docs/framework_api.md](docs/framework_api.md)
+- [docs/framework_flow.md](docs/framework_flow.md)
+- [docs/test_case_entry_standard.md](docs/test_case_entry_standard.md)
+- [docs/case_generation_workflow.md](docs/case_generation_workflow.md)
+- [docs/adr/0001-driver-facade-and-step-capture.md](docs/adr/0001-driver-facade-and-step-capture.md)
+- [docs/upgrade_guide.md](docs/upgrade_guide.md)
+- [docs/performance_baseline.md](docs/performance_baseline.md)
 
 ## Docker
 
-仓库已经提供基础 [Dockerfile](/Volumes/SD%20Card/从入门到%20recode/uiauto/Dockerfile)。
+仓库已经提供基础 [Dockerfile](Dockerfile)。
 
 构建：
 
@@ -203,7 +222,20 @@ artifacts/report_data/ai-prompts/
 docker build -t android-ui-framework .
 ```
 
-容器里默认跑 pytest，并产出结构化报告和 Allure results。
+容器默认跑非真机测试；真机执行通过命令行参数显式传入。
+
+真机运行建议显式挂载 artifacts，并通过环境变量传入设备/应用信息：
+
+```bash
+docker run --rm \
+  -e ANDROID_SERIAL=xxx \
+  -e APP_PACKAGE=mark.via \
+  -e APP_ACTIVITY=.Shell \
+  -v "$PWD/artifacts:/app/artifacts" \
+  --network host \
+  android-ui-framework \
+  python -m pytest tests/test_via_baidu_search.py -m "smoke and device"
+```
 
 当前 GitHub Actions 会在 `main` 分支自动构建并发布 Docker 镜像到 GHCR：
 
@@ -225,17 +257,17 @@ ghcr.io/leaveeeeeee/ai-android-ui-autotest-framework
 
 具体说明看：
 
-- [docs/github_setup.md](/Volumes/SD%20Card/从入门到%20recode/uiauto/docs/github_setup.md)
+- [docs/github_setup.md](docs/github_setup.md)
 
 ## 关键文件入口
 
-- 配置：[config/config.yaml](/Volumes/SD%20Card/从入门到%20recode/uiauto/config/config.yaml)
-- pytest 注册入口：[tests/conftest.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/tests/conftest.py)
-- pytest 插件总入口：[framework/pytest_plugin.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_plugin.py)
-- fixture 定义：[framework/pytest_fixtures.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_fixtures.py)
-- 生命周期与失败采集：[framework/reporting/hooks.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/reporting/hooks.py)
-- Driver：[framework/core/driver.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/driver.py)
-- 步骤模型：[framework/core/steps.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/steps.py)
-- 设备管理：[framework/device/manager.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/device/manager.py)
-- 报告生成：[framework/reporting/simple_html.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/reporting/simple_html.py)
-- 图像匹配：[framework/vision/image_engine.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/vision/image_engine.py)
+- 配置：[config/config.example.yaml](config/config.example.yaml)
+- pytest 注册入口：[tests/conftest.py](tests/conftest.py)
+- pytest 插件总入口：[framework/pytest_plugin.py](framework/pytest_plugin.py)
+- fixture 定义：[framework/pytest_fixtures.py](framework/pytest_fixtures.py)
+- 生命周期与失败采集：[framework/reporting/hooks.py](framework/reporting/hooks.py)
+- Driver：[framework/core/driver.py](framework/core/driver.py)
+- 步骤模型：[framework/core/steps.py](framework/core/steps.py)
+- 设备管理：[framework/device/manager.py](framework/device/manager.py)
+- 报告生成：[framework/reporting/simple_html.py](framework/reporting/simple_html.py)
+- 图像匹配：[framework/vision/image_engine.py](framework/vision/image_engine.py)

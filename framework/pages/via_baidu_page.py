@@ -3,6 +3,7 @@ from __future__ import annotations
 from framework.core.base_page import BasePage
 from framework.core.locator import Locator
 from framework.core.steps import StepSpec
+from framework.core.xpath import xpath_literal
 
 
 class ViaBaiduPage(BasePage):
@@ -73,13 +74,12 @@ class ViaBaiduPage(BasePage):
             detail="点击 Via 顶部地址栏，切换到搜索输入态。",
             expected="显示可输入的搜索面板。",
         ) as step:
-            bounds = self.driver.get_bounds(self.top_address_bar)
+            result = self.click(self.top_address_bar)
             step.update(
                 actual="已点击顶部地址栏。",
                 logs=f"action=click locator={self.top_address_bar.name}",
-                highlight_rect=bounds,
+                highlight_rect=result.bounds,
             )
-            self.click(self.top_address_bar)
 
     def search(self, keyword: str) -> None:
         """执行搜索动作。
@@ -120,49 +120,47 @@ class ViaBaiduPage(BasePage):
             detail="聚焦百度搜索输入框。",
             expected="搜索框进入可输入状态。",
         ) as step:
-            search_input_bounds = self.driver.get_bounds(self.search_input)
+            result = self.click(self.search_input)
             step.update(
                 actual="已点击搜索框。",
                 logs=f"action=click locator={self.search_input.name}",
-                highlight_rect=search_input_bounds,
+                highlight_rect=result.bounds,
             )
-            self.click(self.search_input)
         with self.step(
             "输入搜索词",
             detail=f"在搜索框中覆盖输入关键词：{keyword}",
             expected=f"输入框内容应更新为 {keyword}",
         ) as step:
-            search_input_bounds = self.driver.get_bounds(self.search_input)
+            result = self.input_text(self.search_input, keyword)
             step.update(
                 actual=f"已执行输入：{keyword}",
                 logs=f'action=set_text locator={self.search_input.name} value="{keyword}"',
-                highlight_rect=search_input_bounds,
+                highlight_rect=result.bounds,
             )
-            self.input_text(self.search_input, keyword)
         with self.step(
             "点击搜索按钮",
             detail="点击百度搜索按钮提交查询。",
             expected="页面跳转到搜索结果页。",
         ) as step:
-            search_button_bounds = self.driver.get_bounds(self.search_button)
+            result = self.click(self.search_button)
             step.update(
                 actual="已点击搜索按钮。",
                 logs=f"action=click locator={self.search_button.name}",
-                highlight_rect=search_button_bounds,
+                highlight_rect=result.bounds,
             )
-            self.click(self.search_button)
 
     def is_result_loaded(self, keyword: str) -> bool:
         """判断结果页是否已经出现指定关键词。"""
+        literal = xpath_literal(keyword)
         dynamic_locator = Locator(
-            name=f"result_keyword_{keyword}",
+            name="result_keyword",
             strategy="xpath",
-            value=f'//*[@text="{keyword}"]',
+            value=f"//*[@text={literal}]",
             fallback=[
                 Locator(
-                    name=f"result_keyword_contains_{keyword}",
+                    name="result_keyword_contains",
                     strategy="xpath",
-                    value=f'//*[contains(@text, "{keyword}")]',
+                    value=f"//*[contains(@text, {literal})]",
                 )
             ],
             timeout=15,

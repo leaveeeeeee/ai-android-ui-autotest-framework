@@ -45,7 +45,7 @@
 
 ### 2. 抽出 `ArtifactManager`
 
-产物命名和状态采集下沉到 [framework/core/artifact_manager.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/artifact_manager.py)：
+产物命名和状态采集下沉到 [framework/core/artifact_manager.py](../../framework/core/artifact_manager.py)：
 
 - 管理 `run_id / case_name / sequence`
 - 统一构建产物名
@@ -53,7 +53,7 @@
 
 ### 3. 抽出 `StepCaptureService`
 
-步骤采集逻辑下沉到 [framework/core/step_capture.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/core/step_capture.py)：
+步骤采集逻辑下沉到 [framework/core/step_capture.py](../../framework/core/step_capture.py)：
 
 - 读取 `step_context_provider`
 - 获取上一张截图路径
@@ -72,7 +72,7 @@
 
 ### 4. 页面层优先通过装配注入 `ImageEngine`
 
-页面对象 fixture 现在优先在 [framework/pytest_fixtures.py](/Volumes/SD%20Card/从入门到%20recode/uiauto/framework/pytest_fixtures.py) 里组装 `ImageEngine` 并传入页面对象。
+页面对象 fixture 现在优先在 [framework/pytest_fixtures.py](../../framework/pytest_fixtures.py) 里组装 `ImageEngine` 并传入页面对象。
 `BasePage` 仍保留默认构造能力，仅作为兼容性回退，不建议新代码依赖它直接从 `driver.framework_config` 取配置。
 
 ## 结果

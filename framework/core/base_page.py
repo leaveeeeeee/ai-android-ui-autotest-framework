@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from framework.core.defaults import setting_from_mapping
-from framework.core.driver import DriverAdapter
+from framework.core.driver import DriverAdapter, UiActionResult
 from framework.core.exceptions import ElementNotFoundError
 from framework.core.locator import Locator
 from framework.core.logger import setup_logger
@@ -28,22 +28,23 @@ class BasePage:
         self.image_engine = image_engine or build_image_engine(driver)
         self.logger = setup_logger(self.__class__.__name__)
 
-    def click(self, locator: Locator) -> None:
+    def click(self, locator: Locator) -> UiActionResult:
         """点击元素。
 
         如果元素允许图片兜底，普通定位失败后会自动尝试图像点击。
         """
         try:
-            self.driver.click(locator)
+            return self.driver.click(locator)
         except ElementNotFoundError:
-            if self._click_with_image_fallback(locator):
-                return
+            fallback_result = self._click_with_image_fallback(locator)
+            if fallback_result is not None:
+                return fallback_result
             raise
 
-    def input_text(self, locator: Locator, value: str) -> None:
+    def input_text(self, locator: Locator, value: str) -> UiActionResult:
         """向输入框写入文本。"""
         try:
-            self.driver.set_text(locator, value)
+            return self.driver.set_text(locator, value)
         except ElementNotFoundError:
             fallback = locator.image_fallback_config()
             if fallback is None:
@@ -56,6 +57,12 @@ class BasePage:
                 artifact_name=f"{locator.name}_input",
             )
             self.driver.send_keys(value, clear=True)
+            return UiActionResult(
+                locator_name=locator.name,
+                strategy="image",
+                bounds=fallback["region"],
+                used_fallback=True,
+            )
 
     def clear_text(self, locator: Locator) -> None:
         """清空输入框内容。"""
@@ -122,11 +129,11 @@ class BasePage:
         source_path.write_text(self.driver.page_source(), encoding="utf-8")
         return str(screenshot_path), str(source_path)
 
-    def _click_with_image_fallback(self, locator: Locator) -> bool:
+    def _click_with_image_fallback(self, locator: Locator) -> UiActionResult | None:
         """按显式图片兜底契约执行点击。"""
         fallback = locator.image_fallback_config()
         if fallback is None:
-            return False
+            return None
         self.logger.warning("普通定位失败，改用图片兜底点击：%s", locator.name)
         self.image_engine.click(
             fallback["template"],
@@ -134,4 +141,9 @@ class BasePage:
             region=fallback["region"],
             artifact_name=f"{locator.name}_click",
         )
-        return True
+        return UiActionResult(
+            locator_name=locator.name,
+            strategy="image",
+            bounds=fallback["region"],
+            used_fallback=True,
+        )

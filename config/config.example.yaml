@@ -3,7 +3,7 @@ project:
   env: "test"
 
 device:
-  serial: "5b06a7fa"
+  serial: ""
   app_package: "mark.via"
   app_activity: ".Shell"
   start_url: "https://www.baidu.com"
@@ -11,6 +11,17 @@ device:
   baseline_activity: ".Shell"
   baseline_url: "https://www.baidu.com"
   reset_to_home_after_case: true
+  home_packages:
+    - "com.miui.home"
+    - "com.android.launcher"
+    - "com.android.launcher3"
+    - "com.google.android.apps.nexuslauncher"
+  transient_packages:
+    - "com.android.systemui"
+    - "com.android.permissioncontroller"
+    - "com.google.android.permissioncontroller"
+    - "com.miui.securitycenter"
+    - "com.miui.guardprovider"
   implicitly_wait: 10
   new_command_timeout: 120
 
@@ -25,5 +36,19 @@ framework:
   image_template_dir: "assets/images"
   image_debug_dir: "artifacts/report_data/image_debug"
   image_match_threshold: 0.92
+  image_match_scales: [0.67, 0.75, 0.875, 1.0, 1.125, 1.25, 1.33]
+  max_screenshot_width: 1440
   default_timeout: 10
   default_retry_interval: 0.5
+  click_retry_count: 2
+  click_retry_interval: 0.5
+  logging:
+    level: "INFO"
+    format: "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+
+reporting:
+  capture_policy: "normal"
+  capture_page_source: "on_failure"
+  capture_diff: "marked_steps"
+  history_retention: 20
