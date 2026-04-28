@@ -364,13 +364,21 @@ def _prune_old_runs(reports_root: Path, *, current_run_id: str, keep: int) -> No
 
     run_dirs = sorted(
         (path for path in runs_root.iterdir() if path.is_dir()),
-        key=lambda path: path.stat().st_mtime,
+        key=lambda path: (path.stat().st_mtime_ns, path.name),
         reverse=True,
     )
-    keep_names = {current_run_id}
-    keep_names.update(path.name for path in run_dirs[:keep])
+    keep_names: list[str] = []
+    if (runs_root / current_run_id).exists():
+        keep_names.append(current_run_id)
     for run_dir in run_dirs:
+        if len(keep_names) >= keep:
+            break
         if run_dir.name in keep_names:
+            continue
+        keep_names.append(run_dir.name)
+    keep_name_set = set(keep_names)
+    for run_dir in run_dirs:
+        if run_dir.name in keep_name_set:
             continue
         shutil.rmtree(run_dir)
 

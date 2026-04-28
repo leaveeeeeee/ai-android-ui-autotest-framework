@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from _pytest.stash import Stash
@@ -245,11 +246,12 @@ def test_prune_old_runs_keeps_recent_runs_and_current(tmp_path: Path) -> None:
     for index in range(5):
         run_dir = runs_root / f"run_{index}"
         run_dir.mkdir()
+        os.utime(run_dir, (100 + index, 100 + index))
 
     current = runs_root / "current"
     current.mkdir()
+    os.utime(current, (1, 1))
     _prune_old_runs(reports_root, current_run_id="current", keep=2)
 
     remaining = {path.name for path in runs_root.iterdir()}
-    assert "current" in remaining
-    assert len(remaining) == 2
+    assert remaining == {"current", "run_4"}
